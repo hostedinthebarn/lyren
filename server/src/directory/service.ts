@@ -3,7 +3,7 @@
 // it in-process; on Cloudflare DirectoryDO exposes these methods over RPC, so arguments and results
 // stay plain JSON-safe data. The HTTP half of DirectoryClient (serve) is the directory app.
 
-import type { DirectoryClient, SpaceAuthResult, SpaceIdentity, SpaceSyncPayload } from '../core/ports';
+import type { DirectoryClient, SpaceAuthResult, SpaceIdentity, SpaceSyncPayload, TrustedMeta } from '../core/ports';
 import { orphanedPasskeysWarning } from './admin';
 import type { DirectoryContext } from './context';
 import { purgeExpiredDevices } from './devices';
@@ -60,11 +60,11 @@ export function createDirectoryService(ctx: DirectoryContext, startupWarnings: r
   const { db } = ctx;
 
   /** A personal access token's identity in a space (directory/accessTokens.ts): capped role, never a re-auth window. */
-  function authorizeToken(input: { tokenHash: string; spaceId: string }, nowMs: number): SpaceAuthResult {
+  function authorizeToken(input: { tokenHash: string; spaceId: string; client?: Pick<TrustedMeta, 'clientIp' | 'userAgent'> }, nowMs: number): SpaceAuthResult {
     const found = findToken(db, input.tokenHash, nowMs);
     if (!found) return { ok: false, reason: 'unauthenticated' };
     const { token, user } = found;
-    touchToken(db, token, nowMs);
+    touchToken(db, token, { client: input.client ?? null, spaceId: input.spaceId, nowMs });
     const space = tokenSpaces(db, token).find((s) => s.id === input.spaceId);
     if (!space) return { ok: false, reason: 'not_found' };
     const row = db.get<{ sync_version: number }>('SELECT sync_version FROM spaces WHERE public_id = :spaceId', { spaceId: space.id });
@@ -86,7 +86,7 @@ export function createDirectoryService(ctx: DirectoryContext, startupWarnings: r
     };
   }
 
-  async function authorizeSpace(input: { tokenHash: string; spaceId: string; cookie: 'host' | 'plain' | 'token'; secure: boolean }): Promise<SpaceAuthResult> {
+  async function authorizeSpace(input: Parameters<DirectoryClient['authorizeSpace']>[0]): Promise<SpaceAuthResult> {
     const nowMs = ctx.now();
     if (input.cookie === 'token') return authorizeToken(input, nowMs);
     const found = findSession(db, input.tokenHash, nowMs);
@@ -195,11 +195,11 @@ export function createDirectoryService(ctx: DirectoryContext, startupWarnings: r
     return result;
   }
 
-  async function accessTokenSpaces(input: { tokenHash: string }) {
+  async function accessTokenSpaces(input: Parameters<DirectoryClient['tokenSpaces']>[0]) {
     const nowMs = ctx.now();
     const found = findToken(db, input.tokenHash, nowMs);
     if (!found) return null;
-    touchToken(db, found.token, nowMs);
+    touchToken(db, found.token, { client: input.client ?? null, spaceId: null, nowMs });
     return tokenSpaces(db, found.token);
   }
 

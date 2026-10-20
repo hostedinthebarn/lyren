@@ -561,10 +561,14 @@ Types: inputs in `shared/src/schemas.ts` / `board.ts` / `export.ts`, outputs in 
 Every reorder endpoint requires the exact full id set of its scope (400 otherwise). The account, space and
 admin endpoints are the directory's (server/src/directory/); their rules per endpoint (re-auth, roles, limits)
 are in docs/design/multi-user-and-cloudflare.md §7.2.
+Personal access tokens (`Authorization: Bearer lyr_pat_…`, design §5.12) reach the space endpoints and `/api/mcp`
+only, need no `X-Lyren-Request` header, and get 401 on every account, space-list and admin endpoint.
 
 | Method & path | Input | Output |
 |---|---|---|
 | GET `/api/health` | – | `{ ok, version }` |
+| GET/POST `/api/account/tokens` · DELETE `/api/account/tokens/:tokenId` | – · `TokenCreateInput` (re-auth) | `TokenDTO[]` · 201 `{ token, summary }` (shown once) · `{ ok }` |
+| POST `/api/mcp` | JSON-RPC 2.0 (MCP tools), `Authorization: Bearer lyr_pat_…` | JSON-RPC result; design §5.12 |
 | GET `/api/auth/status` | – | `AuthStatusDTO` |
 | POST `/api/auth/setup` | `SetupInput` (an email; incl. `setupCode`) | 201 `{ user }` + cookies |
 | POST `/api/auth/login` | `LoginInput` (`identifier`: an email or a legacy username) | `{ user }` + cookies |

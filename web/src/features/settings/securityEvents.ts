@@ -128,6 +128,10 @@ export function securityEventText(event: Pick<SecurityEventDTO, 'type' | 'data'>
       const name = str(data.name);
       return name ? `Created the access token “${name}”` : 'Created an access token';
     }
+    case 'token_used': {
+      const name = str(data.name);
+      return name ? `The access token “${name}” was used for the first time` : 'An access token was used for the first time';
+    }
     case 'token_revoked': {
       const name = str(data.name);
       return name ? `Revoked the access token “${name}”` : 'Revoked an access token';

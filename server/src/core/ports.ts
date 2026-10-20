@@ -84,9 +84,11 @@ export interface DirectoryClient {
     /** 'token': tokenHash is a personal access token's (directory/accessTokens.ts), not a session's. */
     cookie: 'host' | 'plain' | 'token';
     secure: boolean;
+    /** The request's client, for the security event of a token's first use. */
+    client?: Pick<TrustedMeta, 'clientIp' | 'userAgent'>;
   }): Promise<SpaceAuthResult>;
   /** The spaces a personal access token reaches, with its (capped) role in each; null when the token is not valid. */
-  tokenSpaces(input: { tokenHash: string }): Promise<TokenSpace[] | null>;
+  tokenSpaces(input: { tokenHash: string; client?: Pick<TrustedMeta, 'clientIp' | 'userAgent'> }): Promise<TokenSpace[] | null>;
   /** Full mirror state for a space. mirrorUserIds = every account row of the mirror with deleted = 0. */
   spaceSync(input: { spaceId: string; mirrorUserIds: number[] }): Promise<SpaceSyncPayload | null>;
   /** Users an importer may map archive users to (§8.5). */

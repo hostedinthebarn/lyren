@@ -16,6 +16,7 @@ describe('securityEventText', () => {
     expect(securityEventText(event('token_created', { name: 'Claude', maxRole: 'member' }))).toBe('Created the access token “Claude”');
     expect(securityEventText(event('token_revoked', { tokenId: 3, name: 'Claude' }))).toBe('Revoked the access token “Claude”');
     expect(securityEventText(event('token_revoked', { tokenId: 3 }))).toBe('Revoked an access token');
+    expect(securityEventText(event('token_used', { tokenId: 3, name: 'Claude' }))).toBe('The access token “Claude” was used for the first time');
   });
 
   it('counts failed sign-ins and revoked devices', () => {

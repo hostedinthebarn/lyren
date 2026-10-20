@@ -42,6 +42,7 @@ export type SecurityEventType =
   | 'admin_invitation_created'
   | 'admin_invitation_revoked'
   | 'token_created'
+  | 'token_used'
   | 'token_revoked';
 
 /**
@@ -86,7 +87,7 @@ export function recordEvent(
     type: SecurityEventType;
     userId: number | null;
     actorId?: number | null;
-    meta: TrustedMeta | null;
+    meta: Pick<TrustedMeta, 'clientIp' | 'userAgent'> | null;
     data?: Record<string, unknown>;
     nowMs: number;
   },

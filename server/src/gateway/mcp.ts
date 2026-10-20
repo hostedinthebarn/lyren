@@ -55,7 +55,7 @@ export function gatewayMcpDeps(o: {
   const tokenHash = sha256Hex(o.token);
   const meta: TrustedMeta = { ...o.meta, sessionTokenHash: tokenHash, sessionCookie: 'token' };
   return {
-    tokenSpaces: () => o.directory.tokenSpaces({ tokenHash }),
+    tokenSpaces: () => o.directory.tokenSpaces({ tokenHash, client: { clientIp: o.meta.clientIp, userAgent: o.meta.userAgent } }),
     async callSpace(spaceId, method, path, body) {
       if (!isSpaceId(spaceId)) return json({ error: { code: 'not_found', message: 'No such space' } }, 404);
       const url = new URL(`/api/s/${spaceId}${path.slice('/api'.length)}`, o.request.url);

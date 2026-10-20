@@ -2133,9 +2133,47 @@ synchronously and returns the transport's result or error text, so mail can be t
 that granted them, with the space, the person and the role), `recovery_used`, `mail_failed`,
 `admin_user_disabled`, `admin_user_enabled`, `admin_granted`, `admin_revoked`, `admin_reset_link`,
 `admin_user_deleted`, `admin_space_deleted`, `admin_space_restored`, `admin_settings_changed`,
-`admin_backup_downloaded`. Each records `ip` and `user_agent` from `meta`. They are kept 90 days (maintenance).
+`admin_backup_downloaded`, `token_created`, `token_used` (a token's first use), `token_revoked` (§5.12). Each records `ip` and `user_agent` from `meta`. They are kept 90 days (maintenance).
 `GET /api/account/security-events?before=<id>` shows a user their own events (pages of 50). The admin user
 detail shows a user's last 50.
+
+### 5.12 Personal access tokens and MCP (`directory/accessTokens.ts`, `gateway/mcp.ts`)
+
+For scripts and AI assistants that work in the account's spaces without a browser session.
+
+- **Format and storage.** `lyr_pat_` + 32 random bytes base64url (43 characters; `core/accessToken.ts#TOKEN_RE`).
+  Only the sha256 hex is stored, in the directory's `personal_access_tokens` (directory migration 2,
+  `compatibleFrom: 1`, so the previous build still opens the database). The token is shown once, in the response
+  that created it. Backups and exports leave the table out (`backupSet.ts`).
+- **Scope.** Each token has a name (1–80), a role cap (`viewer`, `member` or `admin`; never `owner`), an optional
+  single space (null: every space of the account, including ones joined later), and an optional expiry. In a space
+  the token acts as its user with the lower of the user's role and the cap (`cappedRole`). At most 20 live
+  tokens per account.
+- **Where it works.** `Authorization: Bearer lyr_pat_…` is accepted on the space API (`/api/s/:spaceId/…`) and
+  on `POST /api/mcp`, and nowhere else: any directory path answers 401, so a token can never read or change the
+  account, its sessions, passkeys or tokens, nor create or delete spaces. A bearer request needs no
+  `X-Lyren-Request` header (a browser never sends it on its own, so there is nothing to forge). When a request carries both a token
+  and a session cookie, the token decides and the cookie is ignored (`guards.ts#spaceCredential`). The gateway
+  removes the header before the space host and passes the token hash with `cookie: 'token'` to `authorizeSpace`.
+- **Never inside the re-auth window.** The identity's `reauthAt` is the epoch, so every `reauth` route (export,
+  replace imports, and anything else the gate marks) refuses a token; those stay browser-only.
+- **Validity.** A token works while it is not revoked or expired, its user is `active`, and its `auth_epoch` equals
+  the user's, so a password change or reset and an email change end every token, as they end link tokens (§5.7).
+  `last_used_at` is updated at most once an hour. Where identities are cached (Cloudflare, §10.5), `cacheUntil`
+  is at most 60 s, so a revocation takes effect within a minute; revoking from Account settings also pushes
+  `invalidate` to the account's spaces at once.
+- **Managing them.** Account settings → Security → Access tokens (create needs the re-auth window), and on Node the
+  command line: `server.mjs token create|list|revoke`. Events `token_created`, `token_revoked`, and `token_used`
+  for a token's first use, with that request's address and user agent: taken atomically with setting
+  `last_used_at`, so requests racing to be first record it once (§5.11).
+  Maintenance deletes tokens revoked or expired more than 30 days ago.
+- **MCP.** `POST /api/mcp` is a stateless Model Context Protocol endpoint (Streamable HTTP, JSON responses only;
+  protocol versions 2025-06-18, 2025-03-26, 2024-11-05), with hand-written JSON-RPC and no SDK (SPEC §2). Each
+  tool call is one space API request made through `spaces.serve` with the token's identity, so the gate, roles,
+  limits and write generation apply unchanged. Tool inputs are the API's own zod schemas, converted with
+  `z.toJSONSchema`. Any method but `POST` answers 405. The tools: spaces and their overview; projects,
+  milestones, epics and tags (list, get, create, update); tasks (query, search, get, timeline, create, update, bulk
+  update, delete); comments and work logs; boards; the dashboard, the work-log report and activity.
 
 ---------------------------------------------------------------------------------------------------------
 
@@ -2414,6 +2452,10 @@ rows (`imported_by` set) attributed to the actor are editable like their own, ca
 | GET | `/api/account/sessions` | session | | – | `SessionDTO[]` |
 | DELETE | `/api/account/sessions/:sessionId` | session | own | – | `{ ok }` |
 | POST | `/api/account/sessions/revoke-others` | session | | – | `{ ok, revoked }` |
+| GET | `/api/account/tokens` | session | | – | `TokenDTO[]` |
+| POST | `/api/account/tokens` | session | R | `TokenCreateInput` | 201 `{ token, summary: TokenDTO }` (the only time the token is shown) |
+| DELETE | `/api/account/tokens/:tokenId` | session | own | – | `{ ok }`; push `invalidate` |
+| POST | `/api/mcp` | token | §5.12 | JSON-RPC 2.0 | JSON-RPC result |
 | GET | `/api/account/security-events` | session | | `?before=` | `SecurityEventDTO[]` (50) |
 | POST | `/api/account/notices/seen` | session | | – | `{ ok }` |
 | DELETE | `/api/account` | session | R | `AccountDeleteInput` | `{ ok }` |

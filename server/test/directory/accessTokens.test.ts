@@ -136,10 +136,39 @@ describe('personal access tokens', () => {
     const events = ctx.stack.directoryDb.all<{ type: string }>("SELECT type FROM security_events WHERE type LIKE 'token_%'");
     expect(events.map((e) => e.type)).toEqual(['token_created']);
   });
+
+  it('record their first use once, with the client, and later uses only as last_used_at', async () => {
+    const { ctx, issue, call, api } = await setup();
+    const token = issue();
+    const firstUse = () =>
+      ctx.stack.directoryDb.all<{ ip: string | null; user_agent: string | null; data: string }>(
+        "SELECT ip, user_agent, data FROM security_events WHERE type = 'token_used'",
+      );
+    expect(firstUse()).toEqual([]);
+    const ua = { 'User-Agent': 'script/1.0' };
+    const [a, b] = await Promise.all([call(token, 'GET', api('/projects'), undefined, ua), call(token, 'GET', api('/projects'), undefined, ua)]);
+    expect([a.status, b.status]).toEqual([200, 200]);
+    await call(token, 'GET', api('/projects'));
+    const events = firstUse();
+    expect(events).toHaveLength(1);
+    expect(events[0]!.user_agent).toBe('script/1.0');
+    expect(JSON.parse(events[0]!.data)).toMatchObject({ name: 'Claude' });
+    expect(ctx.stack.directoryDb.get<{ last_used_at: string | null }>('SELECT last_used_at FROM personal_access_tokens')!.last_used_at).not.toBeNull();
+  });
 });
 
 describe('the MCP endpoint (POST /api/mcp)', () => {
   const rpc = (id: number, method: string, params: unknown = {}) => ({ jsonrpc: '2.0', id, method, params });
+
+  it("records a token's first use over MCP once, with the client", async () => {
+    const { ctx, issue, call } = await setup();
+    const token = issue();
+    const ua = { 'User-Agent': 'assistant/2.0' };
+    expect((await call(token, 'POST', '/api/mcp', rpc(1, 'tools/list'), ua)).status).toBe(200);
+    expect((await call(token, 'POST', '/api/mcp', rpc(2, 'tools/list'), ua)).status).toBe(200);
+    const events = ctx.stack.directoryDb.all<{ user_agent: string | null; data: string }>("SELECT user_agent, data FROM security_events WHERE type = 'token_used'");
+    expect(events.map((e) => [e.user_agent, JSON.parse(e.data).space])).toEqual([['assistant/2.0', null]]);
+  });
 
   it('initializes, lists its tools and runs them through the space API', async () => {
     const { issue, call, owner, projectId } = await setup();
