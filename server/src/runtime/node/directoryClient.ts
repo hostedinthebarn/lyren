@@ -21,6 +21,10 @@ export class NodeDirectoryClient implements DirectoryClient {
     return this.service.authorizeSpace(input);
   }
 
+  tokenSpaces(input: Parameters<DirectoryClient['tokenSpaces']>[0]) {
+    return this.service.tokenSpaces(input);
+  }
+
   spaceSync(input: Parameters<DirectoryClient['spaceSync']>[0]) {
     return this.service.spaceSync(input);
   }

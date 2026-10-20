@@ -17,10 +17,11 @@ import { CSRF_HEADER } from '@shared/constants';
 import type { RuntimeKind } from '../core/config';
 import type { DirectoryClient, SpaceHostClient, TrustedMeta } from '../core/ports';
 import { APP_VERSION } from '../core/version';
-import { errorBody, handleError, HttpError } from '../http/errors';
+import { errorBody, handleError, HttpError, unauthorized } from '../http/errors';
 import { securityHeaders } from '../http/headers';
 import {
   apiTarget,
+  bearerToken,
   bodyLimitFor,
   checkContentLength,
   checkCsrf,
@@ -28,15 +29,16 @@ import {
   requestMeta,
   requestPath,
   requireSpaceId,
+  spaceCredential,
   spaceRequest,
-  spaceSession,
   type BodyLimits,
 } from './guards';
+import { gatewayMcpDeps, serveMcp } from './mcp';
 
 export interface GatewayDeps {
   limits: BodyLimits;
   runtime: RuntimeKind;
-  directory: Pick<DirectoryClient, 'serve'>;
+  directory: Pick<DirectoryClient, 'serve' | 'tokenSpaces'>;
   spaces: SpaceHostClient;
   /** The client address ('' when unknown) and whether the browser's request was HTTPS. */
   connection(c: Context): { clientIp: string; secure: boolean };
@@ -79,20 +81,31 @@ export function createGatewayApp(deps: GatewayDeps): Hono {
       if (request.method !== 'GET' && request.method !== 'HEAD') throw new HttpError(404, 'not_found', 'Not found');
       return c.json({ ok: true, version: APP_VERSION });
     }
-    checkCsrf(request.method, c.req.header(CSRF_HEADER));
+    // A personal access token stands in for the cookie, and needs no CSRF header (guards.ts).
+    const token = bearerToken(c.req.header('authorization'));
+    if (token === null) checkCsrf(request.method, c.req.header(CSRF_HEADER));
     const meta = requestMeta(request, deps.connection(c));
-    const withSession = (session: { tokenHash: string; cookie: 'host' | 'plain' }): TrustedMeta => ({
+    const withSession = (session: { tokenHash: string; cookie: 'host' | 'plain' | 'token' }): TrustedMeta => ({
       ...meta,
       sessionTokenHash: session.tokenHash,
       sessionCookie: session.cookie,
     });
 
+    if (target.kind === 'mcp') {
+      if (token === null) throw unauthorized();
+      checkContentLength(c.req.header('content-length'), bodyLimitFor(target, path, limits));
+      return serveMcp(request, gatewayMcpDeps({ request, token, meta, directory: deps.directory, spaces: deps.spaces }));
+    }
+
     if (target.kind === 'space') {
       checkContentLength(c.req.header('content-length'), bodyLimitFor(target, path, limits));
       const spaceId = requireSpaceId(target);
-      const session = spaceSession(c.req.header('cookie'), meta.secure, runtime);
+      const session = spaceCredential(token, c.req.header('cookie'), meta.secure, runtime);
       return deps.spaces.serve(spaceId, spaceRequest(request), withSession(session));
     }
+
+    // A token never reaches the directory: no account, admin or sign-in endpoint takes one.
+    if (token !== null) throw unauthorized();
 
     // Every other /api path is the directory's, the unprefixed space paths of the client before spaces
     // (/api/bootstrap, …) included: it answers them as any path it does not know (401, or 404 signed in).

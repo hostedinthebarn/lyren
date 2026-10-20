@@ -37,7 +37,7 @@ function nodeGateway(o: GatewayHarnessOptions & { web?: boolean }): GatewayUnder
   const app = createGatewayApp({
     limits: LIMITS,
     runtime: 'node',
-    directory: { serve: async (request, meta) => record('directory', request, meta) },
+    directory: { serve: async (request, meta) => record('directory', request, meta), tokenSpaces: async () => null },
     spaces: { serve: async (spaceId, request, meta) => record('space', request, meta, spaceId) },
     connection: () => ({ clientIp: CLIENT_IP, secure: o.secure }),
     compress: true,

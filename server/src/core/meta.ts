@@ -53,7 +53,7 @@ function isTrustedMeta(v: unknown): v is TrustedMeta {
     nullableString(m.userAgent, 300) &&
     (m.sessionTokenHash === null ||
       (typeof m.sessionTokenHash === 'string' && /^[0-9a-f]{64}$/.test(m.sessionTokenHash))) &&
-    (m.sessionCookie === null || m.sessionCookie === 'host' || m.sessionCookie === 'plain') &&
+    (m.sessionCookie === null || m.sessionCookie === 'host' || m.sessionCookie === 'plain' || m.sessionCookie === 'token') &&
     (m.sessionTokenHash === null) === (m.sessionCookie === null)
   );
 }

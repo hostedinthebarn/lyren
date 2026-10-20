@@ -10,11 +10,17 @@
 //   4. space requests: a valid space id (else 404) and a session cookie holding a well-formed token
 //      (else 401, before any space is opened); the token is sent on only as its sha256.
 //
+// A personal access token (directory/accessTokens.ts) in `Authorization: Bearer` replaces the cookie: such a
+// request needs no CSRF header (a browser cannot send one cross-site without CORS, which Lyren never
+// allows), reaches the space API and /api/mcp only (401 on every directory path), and its cookies are
+// ignored. A malformed Authorization header is refused (401) rather than ignored.
+//
 // A space request then reaches its space host without the Cookie header and without any x-lyren-meta
 // header a client sent (spaceRequest).
 
 import { CSRF_HEADER } from '@shared/constants';
 import { AUTH_BODY_LIMIT, isLoopbackHost, isPublicDirectoryPath, type RuntimeKind } from '../core/config';
+import { TOKEN_RE } from '../core/accessToken';
 import { readSessionToken } from '../core/cookies';
 import { sha256Hex } from '../core/crypto';
 import { isSpaceId } from '../core/ids';
@@ -73,11 +79,16 @@ export type ApiTarget =
   | { kind: 'health' }
   /** /api/s/<spaceId>/…: `spaceId` is null when it is not a valid id; `path` is the rest (/tasks/12). */
   | { kind: 'space'; spaceId: string | null; path: string }
+  /** POST /api/mcp: the MCP endpoint (gateway/mcp.ts), personal access tokens only. */
+  | { kind: 'mcp' }
   /** Everything else: the directory app. */
   | { kind: 'directory' };
 
+export const MCP_PATH = '/api/mcp';
+
 export function apiTarget(path: string): ApiTarget {
   if (path === '/api/health') return { kind: 'health' };
+  if (path === MCP_PATH) return { kind: 'mcp' };
   if (path.startsWith(SPACE_PREFIX)) {
     const rest = path.slice(SPACE_PREFIX.length);
     const slash = rest.indexOf('/');
@@ -87,6 +98,31 @@ export function apiTarget(path: string): ApiTarget {
     return { kind: 'space', spaceId: isSpaceId(spaceId) ? spaceId : null, path: rest.slice(slash) };
   }
   return { kind: 'directory' };
+}
+
+/**
+ * The personal access token of an `Authorization: Bearer` header, or null when there is no such header.
+ * Any other Authorization header, or a bearer value that is not a token, is refused (401).
+ */
+export function bearerToken(header: string | null | undefined): string | null {
+  if (header === null || header === undefined || header.trim() === '') return null;
+  const match = /^Bearer[ ]+(\S+)\s*$/i.exec(header);
+  if (!match || !TOKEN_RE.test(match[1]!)) throw unauthorized();
+  return match[1]!;
+}
+
+/**
+ * The credential of a space request: a personal access token when one was sent (its sha256, cookie
+ * 'token'), else the session cookie (spaceSession).
+ */
+export function spaceCredential(
+  token: string | null,
+  cookieHeader: string | null | undefined,
+  secure: boolean,
+  runtime: RuntimeKind,
+): { tokenHash: string; cookie: 'host' | 'plain' | 'token' } {
+  if (token !== null) return { tokenHash: sha256Hex(token), cookie: 'token' };
+  return spaceSession(cookieHeader, secure, runtime);
 }
 
 /** 403 unless a state-changing request carries the CSRF header (browsers cannot add it cross-site without CORS). */
@@ -166,12 +202,13 @@ export function withoutMeta(headers: Headers): Headers {
 }
 
 /**
- * The request a space host gets (§2.2, §10.2): the same method, URL and body, without the Cookie header
+ * The request a space host gets (§2.2, §10.2): the same method, URL and body, without the Cookie and Authorization headers
  * and without a client-sent x-lyren-meta.
  */
 export function spaceRequest(request: Request): Request {
   const headers = withoutMeta(request.headers);
   headers.delete('cookie');
+  headers.delete('authorization');
   const init: RequestInit & { duplex?: 'half' } = { method: request.method, headers, signal: request.signal };
   if (request.body !== null && request.method !== 'GET' && request.method !== 'HEAD') {
     init.body = request.body;

@@ -8,7 +8,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Db } from '../../src/core/db';
 import { migrate, readSchemaState, withDeferredForeignKeys, type Migration, type MigrationSet } from '../../src/core/migrate';
-import { DIRECTORY_MIGRATIONS, DIRECTORY_V1 } from '../../src/directory/schema';
+import { DIRECTORY_MIGRATIONS, DIRECTORY_V1, DIRECTORY_V2_TOKENS } from '../../src/directory/schema';
 import { SPACE_MIGRATIONS, SPACE_V1 } from '../../src/space/schema';
 
 export type WithDb = <T>(body: (db: Db) => T) => Promise<T>;
@@ -653,10 +653,11 @@ export function defineDbContract(kind: Db['kind'], withDb: WithDb, options: DbCo
       const sets = [
         {
           set: DIRECTORY_MIGRATIONS,
-          ddl: DIRECTORY_V1,
+          ddl: DIRECTORY_V1 + DIRECTORY_V2_TOKENS,
           tables: [
             '_meta', 'auth_throttle', 'device_tokens', 'email_tokens', 'instance_settings', 'invitations', 'memberships',
-            'passkeys', 'security_events', 'sessions', 'space_people', 'spaces', 'users', 'webauthn_challenges',
+            'passkeys', 'personal_access_tokens', 'security_events', 'sessions', 'space_people', 'spaces', 'users',
+            'webauthn_challenges',
           ],
           triggers: [],
         },

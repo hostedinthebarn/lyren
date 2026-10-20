@@ -251,7 +251,7 @@ describe('a backup set', () => {
         formatVersion: 1,
         createdAt: new Date(nowMs).toISOString(),
         appVersion: APP_VERSION,
-        directory: { file: 'directory.db', schemaVersion: 1 },
+        directory: { file: 'directory.db', schemaVersion: 2 },
         spaces: inSet.map((id, i) => ({
           id,
           name: ["Owner's space", 'Team space', 'Deleted lately'][i],
@@ -272,7 +272,7 @@ describe('a backup set', () => {
 
       const out = path.join(tempDir(), 'out');
       const extracted = extractBackupSet(set, out);
-      expect(extracted.directory).toMatchObject({ kind: 'directory', version: 1, newer: false });
+      expect(extracted.directory).toMatchObject({ kind: 'directory', version: 2, newer: false });
       expect(extracted.spaces.map((s) => [s.id, s.info.kind, s.info.spaceId])).toEqual(inSet.map((id) => [id, 'space', id]));
       const directory = path.join(out, 'directory.db');
       for (const table of ['sessions', 'device_tokens', 'webauthn_challenges', 'email_tokens', 'auth_throttle']) {
@@ -523,7 +523,7 @@ describe('inspectDatabase and refuseNewer (§9.6 step 2)', () => {
   it('tells directories, spaces, 1.x databases and everything else apart', async () => {
     const { cfg, stack, spaces } = await populated();
     stack.close();
-    expect(inspectDatabase(cfg.dbPath)).toEqual({ kind: 'directory', version: 1, compatibleFrom: 1, spaceId: null, newer: false });
+    expect(inspectDatabase(cfg.dbPath)).toEqual({ kind: 'directory', version: 2, compatibleFrom: 1, spaceId: null, newer: false });
     expect(inspectDatabase(path.join(path.dirname(cfg.dbPath), 'spaces', `${spaces.team}.db`))).toEqual({
       kind: 'space',
       version: SPACE_MIGRATIONS.migrations.length,

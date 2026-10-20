@@ -20,7 +20,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { Hono } from 'hono';
 import { migrate } from '../../core/migrate';
-import type { DirectoryClient, ImportCandidateDTO, ImportReservation, SpaceAuthResult, SpaceSyncPayload } from '../../core/ports';
+import type { DirectoryClient, ImportCandidateDTO, ImportReservation, SpaceAuthResult, SpaceSyncPayload, TokenSpace } from '../../core/ports';
 import { APP_VERSION } from '../../core/version';
 import { createDirectoryApp, type DirectoryEnv } from '../../directory/app';
 import { DIRECTORY_MIGRATIONS } from '../../directory/schema';
@@ -94,6 +94,10 @@ export class DirectoryDO extends DurableObject<Env> {
 
   async authorizeSpace(input: Parameters<DirectoryClient['authorizeSpace']>[0]): Promise<SpaceAuthResult> {
     return this.ready().authorizeSpace(input);
+  }
+
+  async tokenSpaces(input: Parameters<DirectoryClient['tokenSpaces']>[0]): Promise<TokenSpace[] | null> {
+    return this.ready().tokenSpaces(input);
   }
 
   async spaceSync(input: Parameters<DirectoryClient['spaceSync']>[0]): Promise<SpaceSyncPayload | null> {

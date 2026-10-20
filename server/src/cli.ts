@@ -25,6 +25,7 @@ import { sendsTokens } from './directory/mailer';
 import { PasswordHasher } from './directory/passwords';
 import { recordEvent } from './directory/security';
 import { getInstanceSettings, setSignupPolicy } from './directory/settings';
+import { createToken, isTokenRole, listTokens, revokeToken, TOKEN_ROLES } from './directory/accessTokens';
 import { resolveIdentifier, userCount } from './directory/users';
 import { HttpError } from './http/errors';
 import { hasWebClient } from './http/static';
@@ -77,6 +78,15 @@ Usage:
   node dist/server.mjs policy [open|invite_only|closed]
                                            Show or set who can create accounts (open needs mail)
   node dist/server.mjs spaces              List the spaces: id, status, name, owners and size
+  node dist/server.mjs token create <email-or-username> <name> [--space <id>]
+                         [--role viewer|member|admin] [--expires-days <n>]
+                                           Create a personal access token for the API and /api/mcp
+                                           (printed once). Default: every space, member, 365 days;
+                                           --expires-days 0 = no expiry
+  node dist/server.mjs token list <email-or-username>
+                                           List the account's live tokens
+  node dist/server.mjs token revoke <email-or-username> <token-id>
+                                           Revoke one of the account's tokens
   node dist/server.mjs help                Show this help
 
 Run the commands as the user that owns the data folder (as root on another user's data folder,
@@ -732,6 +742,98 @@ function startServer(defaults: ConfigDefaults) {
 }
 
 /** `node dist/server.mjs [command]`: the Node build and Docker. */
+const TOKEN_USAGE = `Usage:
+  token create <email-or-username> <name> [--space <id>] [--role viewer|member|admin] [--expires-days <n>]
+  token list <email-or-username>
+  token revoke <email-or-username> <token-id>`;
+
+/**
+ * `token create|list|revoke` (directory/accessTokens.ts): personal access tokens from the command line, for
+ * an operator setting up a script or an assistant. A running server sees a new or revoked token at once.
+ */
+export function token(args: string[], ctx: MaintenanceContext = SERVER_MAINTENANCE): void {
+  const [action, identifier, ...rest] = args;
+  const flags = new Map<string, string>();
+  const positional: string[] = [];
+  for (let i = 0; i < rest.length; i++) {
+    const a = rest[i]!;
+    if (a.startsWith('--')) {
+      const value = rest[i + 1];
+      if (value === undefined) {
+        console.error(`${a} needs a value\n\n${TOKEN_USAGE}`);
+        exitWith(2);
+      }
+      flags.set(a.slice(2), value);
+      i++;
+    } else positional.push(a);
+  }
+  const known = new Set(['space', 'role', 'expires-days']);
+  const unknown = [...flags.keys()].find((k) => !known.has(k));
+  if (!identifier?.trim() || !['create', 'list', 'revoke'].includes(action ?? '') || unknown !== undefined) {
+    console.error(TOKEN_USAGE);
+    exitWith(2);
+  }
+  const config = loadConfigOrExit(ctx.defaults);
+  const stack = openExistingStack(config, ctx);
+  try {
+    const db = stack.directoryDb;
+    const user = accountOrExit(db, identifier);
+    const nowMs = Date.now();
+    if (action === 'list') {
+      const tokens = listTokens(db, user.id, nowMs);
+      if (tokens.length === 0) console.log(`${accountName(user)} has no tokens.`);
+      for (const t of tokens) {
+        console.log(
+          `${t.id}  ${t.name}  ${t.maxRole}  ${t.spaceId ?? 'every space'}  created ${t.createdAt.slice(0, 10)}` +
+            `  expires ${t.expiresAt?.slice(0, 10) ?? 'never'}  last used ${t.lastUsedAt?.slice(0, 16) ?? 'never'}`,
+        );
+      }
+      return;
+    }
+    if (action === 'revoke') {
+      const id = Number(positional[0]);
+      if (!Number.isSafeInteger(id) || id < 1) {
+        console.error(TOKEN_USAGE);
+        exitWith(2);
+      }
+      if (!revokeToken(db, { userId: user.id, tokenId: id, meta: null, nowMs })) {
+        console.error(`${accountName(user)} has no live token ${id}.`);
+        exitWith(1);
+      }
+      console.log(`Token ${id} revoked.`);
+      return;
+    }
+    const name = positional.join(' ');
+    const role = flags.get('role') ?? 'member';
+    const days = Number(flags.get('expires-days') ?? '365');
+    if (!isTokenRole(role) || !Number.isInteger(days) || days < 0 || days > 3650) {
+      console.error(`--role is one of ${TOKEN_ROLES.join(', ')}; --expires-days is 0 to 3650\n\n${TOKEN_USAGE}`);
+      exitWith(2);
+    }
+    let created: ReturnType<typeof createToken>;
+    try {
+      created = createToken(db, {
+        user,
+        name,
+        spaceId: flags.get('space') ?? null,
+        maxRole: role,
+        expiresAt: days === 0 ? null : new Date(nowMs + days * 86_400_000).toISOString(),
+        meta: null,
+        nowMs,
+      });
+    } catch (err) {
+      console.error(err instanceof Error ? err.message : String(err));
+      exitWith(1);
+    }
+    const t = created.summary;
+    console.log(`Token ${t.id} "${t.name}" for ${accountName(user)}: ${t.maxRole}, ${t.spaceId ?? 'every space'}, expires ${t.expiresAt?.slice(0, 10) ?? 'never'}.`);
+    console.log('Shown once; store it now:');
+    console.log(created.token);
+  } finally {
+    stack.close();
+  }
+}
+
 export async function runServerCli(argv: string[], defaults: ConfigDefaults): Promise<void> {
   const [cmd = 'serve', ...args] = argv;
   try {
@@ -756,6 +858,9 @@ export async function runServerCli(argv: string[], defaults: ConfigDefaults): Pr
         break;
       case 'spaces':
         spaces({ ...SERVER_MAINTENANCE, defaults });
+        break;
+      case 'token':
+        token(args, { ...SERVER_MAINTENANCE, defaults });
         break;
       case 'help':
       case '--help':

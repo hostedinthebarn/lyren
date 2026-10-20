@@ -203,6 +203,27 @@ CREATE TABLE instance_settings (                    -- admin-editable values (§
 ) WITHOUT ROWID;
 `;
 
-const MIGRATIONS: ReadonlyArray<Migration> = [{ up: (db) => db.exec(DIRECTORY_V1) }];
+// Personal access tokens (directory/accessTokens.ts). Additive, so a build that knows only V1 can still run.
+export const DIRECTORY_V2_TOKENS = `
+CREATE TABLE personal_access_tokens (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name         TEXT NOT NULL,
+  token_hash   TEXT NOT NULL UNIQUE,                -- sha256(token) hex
+  space_id     INTEGER REFERENCES spaces(id) ON DELETE CASCADE,  -- NULL = every space of the account
+  max_role     TEXT NOT NULL CHECK (max_role IN ('viewer', 'member', 'admin')),
+  auth_epoch   INTEGER NOT NULL,                    -- users.auth_epoch at creation; a later epoch ends the token
+  created_at   TEXT NOT NULL,
+  last_used_at TEXT,
+  expires_at   TEXT,                                -- NULL = no expiry
+  revoked_at   TEXT
+);
+CREATE INDEX personal_access_tokens_user ON personal_access_tokens(user_id);
+`;
+
+const MIGRATIONS: ReadonlyArray<Migration> = [
+  { up: (db) => db.exec(DIRECTORY_V1) },
+  { up: (db) => db.exec(DIRECTORY_V2_TOKENS), compatibleFrom: 1 },
+];
 
 export const DIRECTORY_MIGRATIONS: MigrationSet = { schema: 'directory', migrations: MIGRATIONS };

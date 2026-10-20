@@ -26,6 +26,7 @@ type SpaceCall = 'fetch' | 'init' | 'invalidate' | 'destroy' | 'stats';
 export const directoryCalls: Record<DirectoryCall, number> = {
   fetch: 0,
   authorizeSpace: 0,
+  tokenSpaces: 0,
   spaceSync: 0,
   importCandidates: 0,
   reserveImport: 0,

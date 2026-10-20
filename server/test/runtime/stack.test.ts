@@ -295,7 +295,7 @@ describe('data this build refuses, before writing anything', () => {
     const db = new DatabaseSync(path.join(second, 'lyren.db'));
     db.exec("UPDATE _meta SET value = '9' WHERE key IN ('version', 'compatible_from')");
     db.close();
-    expect(refusal(config({ dataDir: second }))).toBe('Database schema version 9 is newer than this build supports (1). Upgrade the app.');
+    expect(refusal(config({ dataDir: second }))).toBe('Database schema version 9 is newer than this build supports (2). Upgrade the app.');
   });
 
   it('a directory that another connection holds exclusively (another start upgrading or converting it), in both modes', () => {

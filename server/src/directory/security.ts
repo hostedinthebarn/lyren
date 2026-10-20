@@ -40,7 +40,9 @@ export type SecurityEventType =
   | 'admin_settings_changed'
   | 'admin_backup_downloaded'
   | 'admin_invitation_created'
-  | 'admin_invitation_revoked';
+  | 'admin_invitation_revoked'
+  | 'token_created'
+  | 'token_revoked';
 
 /**
  * The administrative actions every admin sees (§5.8.18): the admin API's (with actor_id), the command
