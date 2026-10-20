@@ -11,6 +11,7 @@ import { importCandidates, importCommitted, refundImport, reserveImport } from '
 import { purgeOldEvents } from './security';
 import { findSession, purgeExpiredSessions, sessionEnd, touchSession } from './sessions';
 import { findSpace, purgeDueSpaces } from './spaces';
+import { findToken, purgeOldTokens, TOKEN_REAUTH_AT, tokenSpaces, touchToken } from './accessTokens';
 
 export interface MaintenanceResult {
   sessions: number;
@@ -58,8 +59,36 @@ const iso = (ms: number) => new Date(ms).toISOString();
 export function createDirectoryService(ctx: DirectoryContext, startupWarnings: readonly string[]): DirectoryService {
   const { db } = ctx;
 
-  async function authorizeSpace(input: { tokenHash: string; spaceId: string; cookie: 'host' | 'plain'; secure: boolean }): Promise<SpaceAuthResult> {
+  /** A personal access token's identity in a space (directory/accessTokens.ts): capped role, never a re-auth window. */
+  function authorizeToken(input: { tokenHash: string; spaceId: string }, nowMs: number): SpaceAuthResult {
+    const found = findToken(db, input.tokenHash, nowMs);
+    if (!found) return { ok: false, reason: 'unauthenticated' };
+    const { token, user } = found;
+    touchToken(db, token, nowMs);
+    const space = tokenSpaces(db, token).find((s) => s.id === input.spaceId);
+    if (!space) return { ok: false, reason: 'not_found' };
+    const row = db.get<{ sync_version: number }>('SELECT sync_version FROM spaces WHERE public_id = :spaceId', { spaceId: space.id });
+    return {
+      ok: true,
+      identity: {
+        userId: user.id,
+        displayName: user.display_name,
+        email: user.email,
+        role: space.role,
+        instanceAdmin: user.is_instance_admin === 1,
+        // Not a session: 0 names none (session ids start at 1).
+        sessionId: 0,
+        reauthAt: TOKEN_REAUTH_AT,
+        space: { id: space.id, name: space.name, status: space.status, syncVersion: row?.sync_version ?? 1 },
+      },
+      // A revoked token stops within a minute where identities are cached (Cloudflare, §10.5).
+      cacheUntil: Math.min(nowMs + 60_000, token.expires_at === null ? Infinity : Date.parse(token.expires_at)),
+    };
+  }
+
+  async function authorizeSpace(input: { tokenHash: string; spaceId: string; cookie: 'host' | 'plain' | 'token'; secure: boolean }): Promise<SpaceAuthResult> {
     const nowMs = ctx.now();
+    if (input.cookie === 'token') return authorizeToken(input, nowMs);
     const found = findSession(db, input.tokenHash, nowMs);
     if (!found) return { ok: false, reason: 'unauthenticated' };
     const { session, user } = found;
@@ -142,6 +171,7 @@ export function createDirectoryService(ctx: DirectoryContext, startupWarnings: r
     };
     await task('sessions', () => purgeExpiredSessions(db, nowMs), 'sessions');
     await task('device tokens', () => purgeExpiredDevices(db, nowMs), 'deviceTokens');
+    await task('access tokens', () => purgeOldTokens(db, nowMs), null);
     await task('challenges', () => db.run('DELETE FROM webauthn_challenges WHERE expires_at <= :now', { now }).changes, 'challenges');
     await task(
       'email tokens',
@@ -165,8 +195,17 @@ export function createDirectoryService(ctx: DirectoryContext, startupWarnings: r
     return result;
   }
 
+  async function accessTokenSpaces(input: { tokenHash: string }) {
+    const nowMs = ctx.now();
+    const found = findToken(db, input.tokenHash, nowMs);
+    if (!found) return null;
+    touchToken(db, found.token, nowMs);
+    return tokenSpaces(db, found.token);
+  }
+
   return {
     authorizeSpace,
+    tokenSpaces: accessTokenSpaces,
     spaceSync,
     importCandidates: async (input) => importCandidates(ctx, input),
     reserveImport: async (input) => reserveImport(ctx, input),

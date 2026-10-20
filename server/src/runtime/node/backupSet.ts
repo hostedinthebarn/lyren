@@ -5,8 +5,8 @@
 //   lyren-backup.json   the manifest (first entry): format, formatVersion, createdAt, appVersion, the
 //                       directory's file and schema version, and per space its id, name, file, schema
 //                       version and size
-//   directory.db        a VACUUM INTO snapshot of the directory, without sessions, device tokens, passkey
-//                       challenges, email tokens, throttle counters and open invitations (bearer tokens,
+//   directory.db        a VACUUM INTO snapshot of the directory, without sessions, device tokens, personal
+//                       access tokens, passkey challenges, email tokens, throttle counters and open invitations (bearer tokens,
 //                       and lock-outs that would outlive their reason), secure_delete on, journal_mode DELETE
 //   spaces/             a folder entry
 //   spaces/<id>.db      a VACUUM INTO snapshot of each space the directory snapshot lists: active and
@@ -231,6 +231,7 @@ function stripDirectoryCopy(file: string, nowMs: number): { spaces: BackupSpace[
     copy.exec('PRAGMA secure_delete = ON');
     copy.exec(`DELETE FROM sessions;
       DELETE FROM device_tokens;
+      DELETE FROM personal_access_tokens;
       DELETE FROM webauthn_challenges;
       DELETE FROM email_tokens;
       DELETE FROM auth_throttle;

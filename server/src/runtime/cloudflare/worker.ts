@@ -22,6 +22,7 @@ import type { TrustedMeta } from '../../core/ports';
 import { APP_VERSION } from '../../core/version';
 import {
   apiTarget,
+  bearerToken,
   bodyLimitFor,
   checkContentLength,
   checkCsrf,
@@ -29,9 +30,10 @@ import {
   isCanonicalApiPath,
   requestMeta,
   requireSpaceId,
-  spaceSession,
+  spaceCredential,
 } from '../../gateway/guards';
-import { errorResponse, HttpError, unavailable } from '../../http/errors';
+import { gatewayMcpDeps, serveMcp } from '../../gateway/mcp';
+import { errorResponse, HttpError, unauthorized, unavailable } from '../../http/errors';
 import { securityHeaders } from '../../http/headers';
 import { DoDirectoryClient, DoSpaceHostClient } from './clients';
 import { cfConfig } from './config';
@@ -92,17 +94,25 @@ async function serveApi(request: Request, env: Env, url: URL, config: AppConfig)
     if (request.method !== 'GET' && request.method !== 'HEAD') throw notFound();
     return Response.json({ ok: true, version: APP_VERSION });
   }
-  checkCsrf(request.method, request.headers.get(CSRF_HEADER));
+  // A personal access token stands in for the cookie, and needs no CSRF header (gateway/guards.ts).
+  const token = bearerToken(request.headers.get('authorization'));
+  if (token === null) checkCsrf(request.method, request.headers.get(CSRF_HEADER));
   checkContentLength(request.headers.get('content-length'), bodyLimitFor(target, path, config));
   const meta = requestMeta(request, { clientIp: clientIp(request), secure: url.protocol === 'https:' });
 
   let reach: () => Promise<Response>;
-  if (target.kind === 'space') {
+  if (target.kind === 'mcp') {
+    if (token === null) throw unauthorized();
+    const deps = gatewayMcpDeps({ request, token, meta, directory: new DoDirectoryClient(env), spaces: new DoSpaceHostClient(env) });
+    reach = () => serveMcp(request, deps);
+  } else if (target.kind === 'space') {
     const spaceId = requireSpaceId(target);
-    const session = spaceSession(request.headers.get('cookie'), meta.secure, 'cloudflare');
+    const session = spaceCredential(token, request.headers.get('cookie'), meta.secure, 'cloudflare');
     const spaceMeta: TrustedMeta = { ...meta, sessionTokenHash: session.tokenHash, sessionCookie: session.cookie };
     reach = () => new DoSpaceHostClient(env).serve(spaceId, request, spaceMeta);
   } else {
+    // A token never reaches the directory: no account, admin or sign-in endpoint takes one.
+    if (token !== null) throw unauthorized();
     reach = () => new DoDirectoryClient(env).serve(request, meta);
   }
   try {

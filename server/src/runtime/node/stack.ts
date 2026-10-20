@@ -41,6 +41,7 @@ import { forwardingPort, NodeDirectoryClient } from './directoryClient';
 import {
   detectLegacy,
   LEGACY_NOT_UPGRADED,
+  LEGACY_SCHEMA_VERSION,
   LegacyUpgradeStopped,
   stillOpen,
   upgradeLegacyIfNeeded,
@@ -180,8 +181,8 @@ function openDirectory(config: Config): NodeDb {
   }
   if (legacy.kind === 'legacy') throw new DataRefusal(LEGACY_NOT_UPGRADED);
   if (legacy.kind === 'newer') {
-    const n = DIRECTORY_MIGRATIONS.migrations.length;
-    throw new DataRefusal(`Database schema version ${legacy.userVersion} is newer than this build supports (${n}). Upgrade the app.`);
+    // The 1.x schema's own version, not the directory's: the two are numbered separately.
+    throw new DataRefusal(`Database schema version ${legacy.userVersion} is newer than this build supports (${LEGACY_SCHEMA_VERSION}). Upgrade the app.`);
   }
   let db: NodeDb;
   try {

@@ -20,8 +20,8 @@ export interface TrustedMeta {
   userAgent: string | null;
   /** Space requests only: sha256 hex of the session cookie value. */
   sessionTokenHash: string | null;
-  /** Space requests only: which cookie name carried it (§5.4.1). */
-  sessionCookie: 'host' | 'plain' | null;
+  /** Space requests only: which cookie name carried it (§5.4.1), or 'token' for a personal access token. */
+  sessionCookie: 'host' | 'plain' | 'token' | null;
 }
 
 export interface SpaceIdentity {
@@ -41,6 +41,13 @@ export type SpaceAuthResult =
   | { ok: true; identity: SpaceIdentity; cacheUntil: number } // cacheUntil: ms epoch, ≤ session expiry
   | { ok: false; reason: 'unauthenticated' } // no or expired session, disabled user → 401
   | { ok: false; reason: 'not_found' }; // not a member, space deleted or provisioning → 404
+
+export interface TokenSpace {
+  id: string;
+  name: string;
+  status: 'importing' | 'active';
+  role: SpaceRole;
+}
 
 export interface MirrorProfile {
   userId: number;
@@ -74,9 +81,12 @@ export interface DirectoryClient {
   authorizeSpace(input: {
     tokenHash: string;
     spaceId: string;
-    cookie: 'host' | 'plain';
+    /** 'token': tokenHash is a personal access token's (directory/accessTokens.ts), not a session's. */
+    cookie: 'host' | 'plain' | 'token';
     secure: boolean;
   }): Promise<SpaceAuthResult>;
+  /** The spaces a personal access token reaches, with its (capped) role in each; null when the token is not valid. */
+  tokenSpaces(input: { tokenHash: string }): Promise<TokenSpace[] | null>;
   /** Full mirror state for a space. mirrorUserIds = every account row of the mirror with deleted = 0. */
   spaceSync(input: { spaceId: string; mirrorUserIds: number[] }): Promise<SpaceSyncPayload | null>;
   /** Users an importer may map archive users to (§8.5). */

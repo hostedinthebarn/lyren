@@ -20,6 +20,7 @@ import type {
   SpaceHostClient,
   SpaceInit,
   SpaceSyncPayload,
+  TokenSpace,
   TrustedMeta,
 } from '../../core/ports';
 import { spaceRequest, withoutMeta } from '../../gateway/guards';
@@ -40,7 +41,7 @@ export function withMeta(request: Request, meta: TrustedMeta): Request {
 // A stub as the object's own method types (workers-types' RPC types lose the unions of the results).
 type DirectoryStub = Pick<
   DirectoryDO,
-  'fetch' | 'authorizeSpace' | 'spaceSync' | 'importCandidates' | 'reserveImport' | 'refundImport' | 'importCommitted'
+  'fetch' | 'authorizeSpace' | 'tokenSpaces' | 'spaceSync' | 'importCandidates' | 'reserveImport' | 'refundImport' | 'importCommitted'
 >;
 type SpaceStub = Pick<SpaceDO, 'fetch' | 'init' | 'invalidate' | 'destroy' | 'stats'>;
 
@@ -74,6 +75,10 @@ export class DoDirectoryClient implements DirectoryClient {
 
   authorizeSpace(input: Parameters<DirectoryClient['authorizeSpace']>[0]): Promise<SpaceAuthResult> {
     return rpc('The directory call authorizeSpace', () => this.stub().authorizeSpace(input));
+  }
+
+  tokenSpaces(input: Parameters<DirectoryClient['tokenSpaces']>[0]): Promise<TokenSpace[] | null> {
+    return rpc('The directory call tokenSpaces', () => this.stub().tokenSpaces(input));
   }
 
   spaceSync(input: Parameters<DirectoryClient['spaceSync']>[0]): Promise<SpaceSyncPayload | null> {
