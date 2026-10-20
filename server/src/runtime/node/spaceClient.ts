@@ -36,6 +36,7 @@ export class NodeSpaceClient implements SpaceHostClient, SpaceAdminClient {
         spaceId,
         cookie: meta.sessionCookie,
         secure: meta.secure,
+        client: { clientIp: meta.clientIp, userAgent: meta.userAgent },
       });
     } catch (err) {
       console.error(`[lyren] Authorizing a request for space ${spaceId} failed:`, err);

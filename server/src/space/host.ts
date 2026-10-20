@@ -277,7 +277,13 @@ export function createSpaceHost(o: SpaceHostOptions): SpaceHost {
       const rewritten = rewrite(request);
       if (!rewritten) return apiError(new HttpError(404, 'not_found', 'Not found'));
       if (meta.sessionTokenHash === null || meta.sessionCookie === null) return apiError(unauthorized());
-      const input = { tokenHash: meta.sessionTokenHash, spaceId: space.id, cookie: meta.sessionCookie, secure: meta.secure };
+      const input = {
+        tokenHash: meta.sessionTokenHash,
+        spaceId: space.id,
+        cookie: meta.sessionCookie,
+        secure: meta.secure,
+        client: { clientIp: meta.clientIp, userAgent: meta.userAgent },
+      };
       const load = () => space.directory.authorizeSpace(input);
 
       let auth: { identity: SpaceIdentity; fromCache: boolean };

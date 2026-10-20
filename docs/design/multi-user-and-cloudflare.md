@@ -2132,7 +2132,7 @@ synchronously and returns the transport's result or error text, so mail can be t
 that granted them, with the space, the person and the role), `recovery_used`, `mail_failed`,
 `admin_user_disabled`, `admin_user_enabled`, `admin_granted`, `admin_revoked`, `admin_reset_link`,
 `admin_user_deleted`, `admin_space_deleted`, `admin_space_restored`, `admin_settings_changed`,
-`admin_backup_downloaded`, `token_created`, `token_revoked` (§5.12). Each records `ip` and `user_agent` from `meta`. They are kept 90 days (maintenance).
+`admin_backup_downloaded`, `token_created`, `token_used` (a token's first use), `token_revoked` (§5.12). Each records `ip` and `user_agent` from `meta`. They are kept 90 days (maintenance).
 `GET /api/account/security-events?before=<id>` shows a user their own events (pages of 50). The admin user
 detail shows a user's last 50.
 
@@ -2162,7 +2162,9 @@ For scripts and AI assistants that work in the account's spaces without a browse
   is at most 60 s, so a revocation takes effect within a minute; revoking from Account settings also pushes
   `invalidate` to the account's spaces at once.
 - **Managing them.** Account settings → Security → Access tokens (create needs the re-auth window), and on Node the
-  command line: `server.mjs token create|list|revoke`. Events `token_created` and `token_revoked` (§5.11).
+  command line: `server.mjs token create|list|revoke`. Events `token_created`, `token_revoked`, and `token_used`
+  for a token's first use, with that request's address and user agent: taken atomically with setting
+  `last_used_at`, so requests racing to be first record it once (§5.11).
   Maintenance deletes tokens revoked or expired more than 30 days ago.
 - **MCP.** `POST /api/mcp` is a stateless Model Context Protocol endpoint (Streamable HTTP, JSON responses only;
   protocol versions 2025-06-18, 2025-03-26, 2024-11-05), with hand-written JSON-RPC and no SDK (SPEC §2). Each

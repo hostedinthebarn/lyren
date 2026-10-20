@@ -143,10 +143,26 @@ export function findToken(db: Db, tokenHash: string, nowMs: number): { token: To
   return { token, user };
 }
 
-/** Record the use of a token, at most hourly. */
-export function touchToken(db: Db, token: TokenRow, nowMs: number): void {
-  if (token.last_used_at !== null && nowMs - Date.parse(token.last_used_at) < TOUCH_INTERVAL_MS) return;
-  db.run('UPDATE personal_access_tokens SET last_used_at = :now WHERE id = :id', { id: token.id, now: iso(nowMs) });
+/**
+ * Record the use of a token, at most hourly. Its first use is a security event (`token_used`, with the
+ * client's address and user agent): taken atomically, so requests racing to be first record it once.
+ */
+export function touchToken(
+  db: Db,
+  token: TokenRow,
+  o: { client: Pick<TrustedMeta, 'clientIp' | 'userAgent'> | null; spaceId: string | null; nowMs: number },
+): void {
+  const now = iso(o.nowMs);
+  if (token.last_used_at === null) {
+    db.tx(() => {
+      const first = db.run('UPDATE personal_access_tokens SET last_used_at = :now WHERE id = :id AND last_used_at IS NULL', { id: token.id, now }).changes;
+      if (first === 0) return;
+      recordEvent(db, { type: 'token_used', userId: token.user_id, meta: o.client, data: { tokenId: token.id, name: token.name, space: o.spaceId }, nowMs: o.nowMs });
+    });
+    return;
+  }
+  if (o.nowMs - Date.parse(token.last_used_at) < TOUCH_INTERVAL_MS) return;
+  db.run('UPDATE personal_access_tokens SET last_used_at = :now WHERE id = :id', { id: token.id, now });
 }
 
 /** The spaces a token reaches, with the token's role in each (its cap applied). */

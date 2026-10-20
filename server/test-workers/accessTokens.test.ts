@@ -50,6 +50,10 @@ describe('personal access tokens on Cloudflare', () => {
       expect([path, (await call(token, 'GET', path)).status]).toEqual([path, 401]);
     }
 
+    // Its first use is a security event, with the client's address (CF-Connecting-IP).
+    const used = await owner.get<Array<{ type: string; ip: string | null; data: Record<string, unknown> }>>('/api/account/security-events');
+    expect(used.body.filter((e) => e.type === 'token_used')).toEqual([expect.objectContaining({ ip: '192.0.2.20', data: expect.objectContaining({ name: 'Token member' }) })]);
+
     const viewer = await issue('viewer');
     expect((await call(viewer.token, 'GET', `/api/s/${spaceId}/tasks/${task.body.id}`)).status).toBe(200);
     expect((await call(viewer.token, 'POST', `/api/s/${spaceId}/tasks`, { projectId, title: 'Refused' })).status).toBe(403);
