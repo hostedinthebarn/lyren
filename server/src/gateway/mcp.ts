@@ -9,16 +9,25 @@
 // the API's validation answers a bad call the way it answers the web app.
 
 import { z } from 'zod';
+import { PRIORITY_META, PRIORITY_VALUES } from '@shared/constants';
 import {
+  activityQueryInput,
   commentCreateInput,
+  dashboardQueryInput,
   epicCreateInput,
+  epicUpdateInput,
   milestoneCreateInput,
+  milestoneUpdateInput,
   projectCreateInput,
+  projectUpdateInput,
   searchQueryInput,
+  tagCreateInput,
+  taskBulkUpdateInput,
   taskCreateInput,
   taskQueryInput,
   taskUpdateInput,
   worklogCreateInput,
+  worklogReportQuery,
 } from '@shared/schemas';
 import { sha256Hex } from '../core/crypto';
 import { isSpaceId } from '../core/ids';
@@ -63,10 +72,14 @@ export function gatewayMcpDeps(o: {
 /** Protocol versions this endpoint speaks, newest first. */
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
+/** "0 No priority, 1 Low, …": priorities are numbers in the API. */
+const PRIORITIES = PRIORITY_VALUES.map((p) => `${p} ${PRIORITY_META[p].label}`).join(', ');
+
 const INSTRUCTIONS =
   'Lyren Plan is a project manager: spaces hold projects, which hold milestones, epics and tasks. Start with ' +
   'list_spaces, then get_space_overview for a space to learn its statuses, tags, people and projects (their ids ' +
-  'are what the other tools take). Tasks have a number within their project and a reference such as "WEB-12".';
+  'are what the other tools take). Tasks have a number within their project and a reference such as "WEB-12". ' +
+  `Priority is a number: ${PRIORITIES}.`;
 
 type JsonObject = Record<string, unknown>;
 
@@ -114,6 +127,12 @@ class ToolInputError extends Error {}
 const call = (method: string, path: (args: JsonObject) => string, body?: (args: JsonObject) => unknown) =>
   async (args: JsonObject, deps: McpDeps) => fromResponse(await deps.callSpace(spaceOf(args), method, path(args), body?.(args)));
 
+/** `path` with the tool's other arguments (all but space and `names`) as its query string. */
+const withQuery = (path: string, args: JsonObject, ...names: string[]) => {
+  const query = new URLSearchParams(Object.entries(rest(args, ...names)).map(([k, v]): [string, string] => [k, String(v)])).toString();
+  return query === '' ? path : `${path}?${query}`;
+};
+
 const TOOLS: Tool[] = [
   {
     name: 'list_spaces',
@@ -139,7 +158,7 @@ const TOOLS: Tool[] = [
     name: 'search',
     description: 'Search a space by text: tasks, projects, epics and milestones whose title or reference matches.',
     body: searchQueryInput,
-    run: call('GET', (a) => `/api/search?${new URLSearchParams(Object.entries(rest(a)).map(([k, v]): [string, string] => [k, String(v)]))}`),
+    run: call('GET', (a) => withQuery('/api/search', a)),
   },
   {
     name: 'query_tasks',
@@ -172,13 +191,13 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'create_task',
-    description: 'Create a task in a project. Without statusId it gets the space\'s default status.',
+    description: `Create a task in a project. Without statusId it gets the space's default status. Priority: ${PRIORITIES}.`,
     body: taskCreateInput,
     run: call('POST', () => '/api/tasks', (a) => rest(a)),
   },
   {
     name: 'update_task',
-    description: 'Change a task: give only the fields to change. Use statusId to move it, archived to archive it.',
+    description: `Change a task: give only the fields to change. Use statusId to move it, archived to archive it. Priority: ${PRIORITIES}.`,
     params: { id: idParam('The task id') },
     body: taskUpdateInput,
     run: call('PATCH', (a) => `/api/tasks/${intOf(a, 'id')}`, (a) => rest(a, 'id')),
@@ -203,10 +222,41 @@ const TOOLS: Tool[] = [
     run: call('GET', () => '/api/boards'),
   },
   {
+    name: 'bulk_update_tasks',
+    description: `Change several tasks at once: status, priority, epic, due date, tags added or removed, archived. Priority: ${PRIORITIES}.`,
+    body: taskBulkUpdateInput,
+    run: call('POST', () => '/api/tasks/bulk', (a) => rest(a)),
+  },
+  {
+    name: 'delete_task',
+    description: 'Delete a task for good, with its comments and work logs. Prefer update_task with archived: true unless asked to delete.',
+    params: { id: idParam('The task id') },
+    run: call('DELETE', (a) => `/api/tasks/${intOf(a, 'id')}`),
+  },
+  {
+    name: 'get_project',
+    description: 'One project, with its task counts.',
+    params: { id: idParam('The project id') },
+    run: call('GET', (a) => `/api/projects/${intOf(a, 'id')}`),
+  },
+  {
     name: 'create_project',
     description: 'Create a project. Its key (such as WEB) prefixes its task references.',
     body: projectCreateInput,
     run: call('POST', () => '/api/projects', (a) => rest(a)),
+  },
+  {
+    name: 'update_project',
+    description: "Change a project's name, key, description, color or status: give only the fields to change.",
+    params: { id: idParam('The project id') },
+    body: projectUpdateInput,
+    run: call('PATCH', (a) => `/api/projects/${intOf(a, 'id')}`, (a) => rest(a, 'id')),
+  },
+  {
+    name: 'list_milestones',
+    description: "A project's milestones, in order, with their dates and progress.",
+    params: { projectId: idParam('The project id') },
+    run: call('GET', (a) => `/api/projects/${intOf(a, 'projectId')}/milestones`),
   },
   {
     name: 'create_milestone',
@@ -215,10 +265,59 @@ const TOOLS: Tool[] = [
     run: call('POST', () => '/api/milestones', (a) => rest(a)),
   },
   {
+    name: 'update_milestone',
+    description: "Change a milestone's name, description, status or dates: give only the fields to change.",
+    params: { id: idParam('The milestone id') },
+    body: milestoneUpdateInput,
+    run: call('PATCH', (a) => `/api/milestones/${intOf(a, 'id')}`, (a) => rest(a, 'id')),
+  },
+  {
+    name: 'list_epics',
+    description: "A project's epics, in order, with their milestone, dates and progress.",
+    params: { projectId: idParam('The project id') },
+    run: call('GET', (a) => `/api/projects/${intOf(a, 'projectId')}/epics`),
+  },
+  {
     name: 'create_epic',
     description: 'Create an epic in a project.',
     body: epicCreateInput,
     run: call('POST', () => '/api/epics', (a) => rest(a)),
+  },
+  {
+    name: 'update_epic',
+    description: "Change an epic's name, description, milestone, color, status or dates: give only the fields to change.",
+    params: { id: idParam('The epic id') },
+    body: epicUpdateInput,
+    run: call('PATCH', (a) => `/api/epics/${intOf(a, 'id')}`, (a) => rest(a, 'id')),
+  },
+  {
+    name: 'list_tags',
+    description: "A space's tags, with how many tasks carry each.",
+    run: call('GET', () => '/api/tags'),
+  },
+  {
+    name: 'create_tag',
+    description: 'Create a tag (then set it on tasks with update_task tagIds or addTagIds).',
+    body: tagCreateInput,
+    run: call('POST', () => '/api/tags', (a) => rest(a)),
+  },
+  {
+    name: 'get_dashboard',
+    description: "The space's dashboard: overdue and due-soon work, recent activity and progress by project.",
+    body: dashboardQueryInput,
+    run: call('GET', (a) => withQuery('/api/dashboard', a)),
+  },
+  {
+    name: 'work_log_report',
+    description: 'Work logged across tasks between two dates (default: the last 30 days), optionally for one project or person.',
+    body: worklogReportQuery,
+    run: call('GET', (a) => withQuery('/api/worklogs', a)),
+  },
+  {
+    name: 'get_activity',
+    description: 'Recent changes in the space, newest first, optionally for one project or task; page with before.',
+    body: activityQueryInput,
+    run: call('GET', (a) => withQuery('/api/activity', a)),
   },
 ];
 

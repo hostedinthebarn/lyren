@@ -184,6 +184,44 @@ describe('the MCP endpoint (POST /api/mcp)', () => {
     expect((await tool('list_projects', {})).isError).toBe(true);
   });
 
+  it('lists, creates and updates milestones, epics, tags and projects, and reports on the space', async () => {
+    const { issue, call, owner, projectId } = await setup();
+    const token = issue();
+    const tool = async (name: string, args: Record<string, unknown>) => {
+      const res = await call(token, 'POST', '/api/mcp', rpc(9, 'tools/call', { name, arguments: { space: owner.spaceId, ...args } }));
+      const result = res.body.result as { content: Array<{ text: string }>; isError: boolean };
+      expect(result.isError, `${name}: ${result.content[0]!.text}`).toBe(false);
+      return JSON.parse(result.content[0]!.text);
+    };
+
+    const milestone = await tool('create_milestone', { projectId, name: 'MVP', dueDate: '2026-12-01' });
+    expect((await tool('list_milestones', { projectId })).map((m: { id: number }) => m.id)).toContain(milestone.id);
+    expect((await tool('update_milestone', { id: milestone.id, name: 'MVP launch' })).name).toBe('MVP launch');
+
+    const epic = await tool('create_epic', { projectId, milestoneId: milestone.id, name: 'Checkout' });
+    expect((await tool('list_epics', { projectId })).map((e: { id: number }) => e.id)).toContain(epic.id);
+    expect((await tool('update_epic', { id: epic.id, status: 'in_progress' })).status).toBe('in_progress');
+
+    const tag = await tool('create_tag', { name: 'urgent' });
+    expect((await tool('list_tags', {})).map((t: { id: number }) => t.id)).toContain(tag.id);
+
+    expect((await tool('get_project', { id: projectId })).key).toBe('WEB');
+    expect((await tool('update_project', { id: projectId, description: 'Relaunch' })).description).toBe('Relaunch');
+
+    const a = await tool('create_task', { projectId, title: 'One', epicId: epic.id });
+    const b = await tool('create_task', { projectId, title: 'Two' });
+    const bulk = await tool('bulk_update_tasks', { ids: [a.id, b.id], patch: { priority: 3, addTagIds: [tag.id] } });
+    expect(bulk.tasks.every((t: TaskDTO) => t.priority === 3)).toBe(true);
+    expect(await tool('delete_task', { id: b.id })).toEqual({ ok: true });
+
+    await tool('log_work', { taskId: a.id, date: '2026-10-20', minutes: 45 });
+    const report = await tool('work_log_report', { from: '2026-10-01', to: '2026-10-31' });
+    expect(JSON.stringify(report)).toContain('45');
+    expect(await tool('get_dashboard', { today: '2026-10-20' })).toBeTypeOf('object');
+    const activity = await tool('get_activity', { taskId: a.id, limit: 5 });
+    expect(JSON.stringify(activity)).toContain('task.created');
+  });
+
   it("applies the token's role: a viewer token's writes are tool errors", async () => {
     const { issue, call, owner, projectId } = await setup();
     const viewer = issue({ role: 'viewer' });
