@@ -3,7 +3,7 @@
 // (§5.8.17); and writes whose body arrives late, which act on the session and account as they are then (§5).
 
 import { describe, expect, it } from 'vitest';
-import type { AuthStatusDTO, SessionDTO } from '@shared/types';
+import type { AuthStatusDTO, SessionDTO, TokenDTO } from '@shared/types';
 import { sha256Hex } from '../../src/core/crypto';
 import { createDirectoryHarness, OWNER_EMAIL, PASSWORD } from '../support/directoryHarness';
 import { heldBody, settle } from '../support/heldBody';
@@ -306,5 +306,73 @@ describe('a write whose body arrives late acts on the state after it (§5)', () 
     const res = await pending;
     expect(res.body.error.code).toBe('last_admin');
     expect(h.db.all('SELECT id FROM users ORDER BY id')).toEqual([{ id: first.id }, { id: second.user.id }]);
+  });
+});
+
+describe('/api/account/tokens', () => {
+  const MINUTE = 60_000;
+
+  it('creates a token inside the re-auth window, shows it once, lists it, and revokes it', async () => {
+    const h = createDirectoryHarness();
+    const { client, spaceId } = await h.setup();
+    const res = await client.post<{ token: string; summary: TokenDTO }>('/api/account/tokens', {
+      name: ' Claude ',
+      spaceId,
+      role: 'viewer',
+      expiresInDays: 30,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body.token).toMatch(/^lyr_pat_[A-Za-z0-9_-]{43}$/);
+    expect(res.body.summary).toMatchObject({ name: 'Claude', spaceId, role: 'viewer', lastUsedAt: null });
+    expect(res.body.summary.expiresAt).toBe(new Date(h.clock.now() + 30 * 86_400_000).toISOString());
+    expect(h.db.get<{ token_hash: string }>('SELECT token_hash FROM personal_access_tokens')!.token_hash).toBe(sha256Hex(res.body.token));
+
+    const list = await client.get<TokenDTO[]>('/api/account/tokens');
+    expect(list.body).toEqual([res.body.summary]);
+    expect(JSON.stringify(list.body)).not.toContain(res.body.token);
+
+    h.spaces.calls.length = 0;
+    expect((await client.delete(`/api/account/tokens/${res.body.summary.id}`)).status).toBe(200);
+    await h.settle();
+    expect(h.spaces.ids('invalidate')).toEqual([spaceId]);
+    expect((await client.get<TokenDTO[]>('/api/account/tokens')).body).toEqual([]);
+    expect((await client.delete(`/api/account/tokens/${res.body.summary.id}`)).status).toBe(404);
+    const events = await client.get('/api/account/security-events');
+    expect(events.body.slice(0, 2).map((e: { type: string }) => e.type)).toEqual(['token_revoked', 'token_created']);
+  });
+
+  it('needs the re-auth window to create, and checks the input', async () => {
+    const h = createDirectoryHarness();
+    const { client } = await h.setup();
+    const body = { name: 'Claude', spaceId: null, role: 'member', expiresInDays: null };
+    expect((await client.post('/api/account/tokens', { ...body, role: 'owner' })).status).toBe(400);
+    expect((await client.post('/api/account/tokens', { ...body, name: '  ' })).status).toBe(400);
+    expect((await client.post('/api/account/tokens', { ...body, expiresInDays: 0 })).status).toBe(400);
+    const elsewhere = await client.post('/api/account/tokens', { ...body, spaceId: 'zzzzzzzzzzzzzzzz' });
+    expect(elsewhere.status).toBe(400);
+    expect(elsewhere.body.error.details).toEqual([expect.objectContaining({ path: 'spaceId' })]);
+
+    h.clock.advance(11 * MINUTE);
+    expect((await client.post('/api/account/tokens', body)).body.error.code).toBe('reauth_required');
+    expect(await client.post('/api/account/reauth/password', { password: PASSWORD })).toMatchObject({ status: 200 });
+    expect((await client.post('/api/account/tokens', body)).status).toBe(201);
+    expect(h.db.all('SELECT id FROM personal_access_tokens')).toHaveLength(1);
+  });
+
+  it("cannot see or revoke another account's token", async () => {
+    const h = createDirectoryHarness();
+    const { client, spaceId } = await h.setup();
+    const member = await h.addUser({ email: 'member@example.com', spaceId });
+    await member.client.post('/api/account/reauth/password', { password: PASSWORD });
+    const theirs = await member.client.post<{ token: string; summary: TokenDTO }>('/api/account/tokens', {
+      name: 'Theirs',
+      spaceId: null,
+      role: 'member',
+      expiresInDays: null,
+    });
+    expect(theirs.status).toBe(201);
+    expect((await client.get('/api/account/tokens')).body).toEqual([]);
+    expect((await client.delete(`/api/account/tokens/${theirs.body.summary.id}`)).status).toBe(404);
+    expect((await member.client.get<TokenDTO[]>('/api/account/tokens')).body).toHaveLength(1);
   });
 });

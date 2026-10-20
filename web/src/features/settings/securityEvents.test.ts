@@ -12,6 +12,12 @@ describe('securityEventText', () => {
     expect(securityEventText(event('admin_backup_downloaded'))).toBe('Downloaded a backup of the instance');
   });
 
+  it('names the access tokens created and revoked', () => {
+    expect(securityEventText(event('token_created', { name: 'Claude', maxRole: 'member' }))).toBe('Created the access token “Claude”');
+    expect(securityEventText(event('token_revoked', { tokenId: 3, name: 'Claude' }))).toBe('Revoked the access token “Claude”');
+    expect(securityEventText(event('token_revoked', { tokenId: 3 }))).toBe('Revoked an access token');
+  });
+
   it('counts failed sign-ins and revoked devices', () => {
     expect(securityEventText(event('login_failed', { failures: 4 }))).toBe('Failed sign-in attempts (4)');
     expect(securityEventText(event('login_failed', { failures: 1 }))).toBe('Failed sign-in attempt');

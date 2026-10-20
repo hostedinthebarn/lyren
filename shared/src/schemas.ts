@@ -21,7 +21,8 @@ import {
 } from './constants';
 import { isValidISODate, type WeekStart } from './dates';
 import { emailSchema } from './email';
-import { INVITABLE_ROLES, SPACE_ROLES } from './roles';
+import { SPACE_ID_RE } from './ids';
+import { INVITABLE_ROLES, SPACE_ROLES, TOKEN_ROLES } from './roles';
 
 // ---------------------------------------------------------------------------
 // Primitives
@@ -119,6 +120,16 @@ export const reauthPasswordInput = z.object({ password: z.string().min(1, 'Requi
 export type ReauthPasswordInput = z.input<typeof reauthPasswordInput>;
 
 /** DELETE /api/account: `confirm` is the account's email address, or its username when it has none. */
+/** POST /api/account/tokens: a personal access token (shown once). expiresInDays null = no expiry. */
+export const tokenCreateInput = z.object({
+  name: z.string().trim().min(1, 'Required').max(80),
+  /** A space's id, or null for every space of the account. */
+  spaceId: z.string().regex(SPACE_ID_RE, 'Not a space id').nullable(),
+  role: z.enum(TOKEN_ROLES),
+  expiresInDays: z.number().int().min(1).max(3650).nullable(),
+});
+export type TokenCreateInput = z.input<typeof tokenCreateInput>;
+
 export const accountDeleteInput = z.object({ confirm: z.string().trim().min(1, 'Required').max(LIMITS.identifierMax) });
 export type AccountDeleteInput = z.input<typeof accountDeleteInput>;
 

@@ -12,7 +12,7 @@ import type {
   SignupPolicy,
   StatusCategory,
 } from './constants';
-import type { InvitableRole, SpaceRole } from './roles';
+import type { InvitableRole, SpaceRole, TokenRole } from './roles';
 import type { Settings, SpaceSettings, UserPreferences } from './schemas';
 
 /** An account, as its owner sees it (setup, login, AuthStatusDTO, GET/PATCH /api/account). */
@@ -29,6 +29,18 @@ export interface UserDTO {
   isInstanceAdmin: boolean;
   hasPassword: boolean;
   passkeyCount: number;
+}
+
+/** A personal access token as its owner sees it (never the token itself, except once on creation). */
+export interface TokenDTO {
+  id: number;
+  name: string;
+  /** The space it is limited to, or null for every space. */
+  spaceId: string | null;
+  role: TokenRole;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
 }
 
 export interface SessionDTO {

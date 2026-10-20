@@ -124,6 +124,14 @@ export function securityEventText(event: Pick<SecurityEventDTO, 'type' | 'data'>
     }
     case 'admin_invitation_created':
       return 'Invited someone to the instance';
+    case 'token_created': {
+      const name = str(data.name);
+      return name ? `Created the access token “${name}”` : 'Created an access token';
+    }
+    case 'token_revoked': {
+      const name = str(data.name);
+      return name ? `Revoked the access token “${name}”` : 'Revoked an access token';
+    }
     case 'admin_invitation_revoked':
       return 'Revoked an invitation to the instance';
     default:
