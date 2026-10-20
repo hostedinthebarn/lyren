@@ -17,6 +17,13 @@
 export const SPACE_ROLES = ['owner', 'admin', 'member', 'viewer'] as const;
 export type SpaceRole = (typeof SPACE_ROLES)[number];
 
+/**
+ * Roles a personal access token can be capped at: never owner, whose own routes (the archive, the space's
+ * life) stay with a signed-in browser.
+ */
+export const TOKEN_ROLES = ['viewer', 'member', 'admin'] as const;
+export type TokenRole = (typeof TOKEN_ROLES)[number];
+
 /** Roles an invitation can grant: never owner (ownership is transferred, §6.3). */
 export const INVITABLE_ROLES = ['admin', 'member', 'viewer'] as const;
 export type InvitableRole = Exclude<SpaceRole, 'owner'>;

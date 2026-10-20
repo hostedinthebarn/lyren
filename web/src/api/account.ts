@@ -9,10 +9,11 @@ import type {
   EmailChangeInput,
   PreferencesUpdateInput,
   ReauthPasswordInput,
+  TokenCreateInput,
   UpdateAccountInput,
   UserPreferences,
 } from '@shared/schemas';
-import type { AuthStatusDTO, EmailChangeDTO, SecurityEventDTO, SessionDTO, UserDTO } from '@shared/types';
+import type { AuthStatusDTO, EmailChangeDTO, SecurityEventDTO, SessionDTO, TokenDTO, UserDTO } from '@shared/types';
 import { signedOut } from './auth';
 import { http, qs, request } from './client';
 import { qk } from './keys';
@@ -134,6 +135,29 @@ export function useRevokeOtherSessions() {
   return useMutation({
     mutationFn: () => http.post<{ ok: true; revoked: number }>('/account/sessions/revoke-others'),
     onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: qk.sessions }), qc.invalidateQueries({ queryKey: qk.securityEvents })]),
+  });
+}
+
+/** The account's personal access tokens, for the API and MCP (§5.12); never the tokens themselves. */
+export function useAccessTokens() {
+  return useQuery({ queryKey: qk.accessTokens, queryFn: () => http.get<TokenDTO[]>('/account/tokens') });
+}
+
+/** Creates a token (re-auth). The response is the only time the token itself is shown. */
+export function useCreateAccessToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TokenCreateInput) => http.post<{ token: string; summary: TokenDTO }>('/account/tokens', input),
+    gcTime: 0,
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: qk.accessTokens }), qc.invalidateQueries({ queryKey: qk.securityEvents })]),
+  });
+}
+
+export function useRevokeAccessToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => http.del<{ ok: true }>(`/account/tokens/${id}`),
+    onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: qk.accessTokens }), qc.invalidateQueries({ queryKey: qk.securityEvents })]),
   });
 }
 

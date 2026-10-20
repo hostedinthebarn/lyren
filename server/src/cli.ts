@@ -784,7 +784,7 @@ export function token(args: string[], ctx: MaintenanceContext = SERVER_MAINTENAN
       if (tokens.length === 0) console.log(`${accountName(user)} has no tokens.`);
       for (const t of tokens) {
         console.log(
-          `${t.id}  ${t.name}  ${t.maxRole}  ${t.spaceId ?? 'every space'}  created ${t.createdAt.slice(0, 10)}` +
+          `${t.id}  ${t.name}  ${t.role}  ${t.spaceId ?? 'every space'}  created ${t.createdAt.slice(0, 10)}` +
             `  expires ${t.expiresAt?.slice(0, 10) ?? 'never'}  last used ${t.lastUsedAt?.slice(0, 16) ?? 'never'}`,
         );
       }
@@ -826,7 +826,7 @@ export function token(args: string[], ctx: MaintenanceContext = SERVER_MAINTENAN
       exitWith(1);
     }
     const t = created.summary;
-    console.log(`Token ${t.id} "${t.name}" for ${accountName(user)}: ${t.maxRole}, ${t.spaceId ?? 'every space'}, expires ${t.expiresAt?.slice(0, 10) ?? 'never'}.`);
+    console.log(`Token ${t.id} "${t.name}" for ${accountName(user)}: ${t.role}, ${t.spaceId ?? 'every space'}, expires ${t.expiresAt?.slice(0, 10) ?? 'never'}.`);
     console.log('Shown once; store it now:');
     console.log(created.token);
   } finally {

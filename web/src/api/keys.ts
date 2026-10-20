@@ -10,6 +10,7 @@
 //   ['auth','link',kind,token]                what a link's token opens (SignupPreviewDTO, PasswordResetPreviewDTO,
 //                                             InvitationPreviewDTO); in memory only, dropped once the link is used
 //   ['account','sessions']                    SessionDTO[]
+//   ['account','tokens']                      TokenDTO[]
 //   ['account','passkeys']                    PasskeyDTO[]
 //   ['account','security-events']             SecurityEventDTO[] (infinite)
 //   ['account','invitations']                 PendingInvitationDTO[] (to the account's verified address)
@@ -41,6 +42,7 @@ export const qk = {
   linkPreview: (kind: 'signup' | 'reset' | 'invitation', token: string) => ['auth', 'link', kind, token] as const,
   sessions: ['account', 'sessions'] as const,
   passkeys: ['account', 'passkeys'] as const,
+  accessTokens: ['account', 'tokens'] as const,
   securityEvents: ['account', 'security-events'] as const,
   pendingInvitations: ['account', 'invitations'] as const,
   spacesAll: ['spaces'] as const,

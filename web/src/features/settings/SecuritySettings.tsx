@@ -55,6 +55,7 @@ import {
   proposedPasskeyName,
 } from './passkeys';
 import { newPasswordErrors } from './passwordStrength';
+import { AccessTokensCard } from './AccessTokensCard';
 import { isWarningEvent, securityEventText } from './securityEvents';
 import { SettingsCard, SettingsPage } from './SettingsBlocks';
 import { StrengthMeter } from './StrengthMeter';
@@ -603,6 +604,7 @@ export default function SecuritySettings() {
       <PasswordCard passkeysHere={passkeysHere} />
       {passkeysHere && <PasskeysCard />}
       <SessionsCard />
+      <AccessTokensCard />
       <SecurityEventsCard />
     </SettingsPage>
   );

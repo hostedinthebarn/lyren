@@ -13,9 +13,10 @@
 // auth_epoch moves on (password reset or change, email change): the token records the epoch it was
 // created under, so the places that end an account's other credentials end its tokens without a line here.
 
-import { ROLE_RANK, type SpaceRole } from '@shared/roles';
+import { ROLE_RANK, TOKEN_ROLES, type SpaceRole, type TokenRole } from '@shared/roles';
 import { TOKEN_PREFIX } from '../core/accessToken';
 import { randomToken, sha256Hex } from '../core/crypto';
+import type { TokenDTO } from '@shared/types';
 import type { Db } from '../core/db';
 import type { TrustedMeta } from '../core/ports';
 import { recordEvent } from './security';
@@ -23,9 +24,7 @@ import type { UserRow } from './users';
 
 export { TOKEN_PREFIX, TOKEN_RE } from '../core/accessToken';
 
-/** Roles a token can be capped at: never owner (owner-only routes are the archive and the space's life). */
-export const TOKEN_ROLES = ['viewer', 'member', 'admin'] as const;
-export type TokenRole = (typeof TOKEN_ROLES)[number];
+export { TOKEN_ROLES, type TokenRole };
 
 const MAX_TOKENS_PER_USER = 20;
 const NAME_MAX = 80;
@@ -49,16 +48,8 @@ export interface TokenRow {
   revoked_at: string | null;
 }
 
-export interface TokenSummary {
-  id: number;
-  name: string;
-  /** The space's public id, or null for every space of the account. */
-  spaceId: string | null;
-  maxRole: TokenRole;
-  createdAt: string;
-  lastUsedAt: string | null;
-  expiresAt: string | null;
-}
+/** What the token's owner sees of it (@shared/types TokenDTO). */
+export type TokenSummary = TokenDTO;
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
@@ -186,12 +177,12 @@ export function listTokens(db: Db, userId: number, nowMs: number): TokenSummary[
 /** Revoke one of the account's tokens; false when it has no such live token. */
 export function revokeToken(db: Db, o: { userId: number; tokenId: number; meta: TrustedMeta | null; nowMs: number }): boolean {
   return db.tx(() => {
-    const changed = db.run(
-      'UPDATE personal_access_tokens SET revoked_at = :now WHERE id = :id AND user_id = :userId AND revoked_at IS NULL',
+    const revoked = db.get<{ name: string }>(
+      'UPDATE personal_access_tokens SET revoked_at = :now WHERE id = :id AND user_id = :userId AND revoked_at IS NULL RETURNING name',
       { id: o.tokenId, userId: o.userId, now: iso(o.nowMs) },
-    ).changes;
-    if (changed === 0) return false;
-    recordEvent(db, { type: 'token_revoked', userId: o.userId, meta: o.meta, data: { tokenId: o.tokenId }, nowMs: o.nowMs });
+    );
+    if (!revoked) return false;
+    recordEvent(db, { type: 'token_revoked', userId: o.userId, meta: o.meta, data: { tokenId: o.tokenId, name: revoked.name }, nowMs: o.nowMs });
     return true;
   });
 }
@@ -211,7 +202,7 @@ function summarize(row: TokenRow): TokenSummary {
     id: row.id,
     name: row.name,
     spaceId: null,
-    maxRole: row.max_role,
+    role: row.max_role,
     createdAt: row.created_at,
     lastUsedAt: row.last_used_at,
     expiresAt: row.expires_at,

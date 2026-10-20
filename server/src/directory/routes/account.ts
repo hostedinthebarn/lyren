@@ -12,14 +12,16 @@ import {
   idParamSchema,
   preferencesUpdateInput,
   reauthPasswordInput,
+  tokenCreateInput,
   updateAccountInput,
   type UserPreferences,
 } from '@shared/schemas';
-import type { SecurityEventDTO, SessionDTO, UserDTO } from '@shared/types';
+import type { SecurityEventDTO, SessionDTO, TokenDTO, UserDTO } from '@shared/types';
 import { expiredSessionCookies } from '../../core/cookies';
 import { badRequest, conflict, lastCredential, notFound } from '../../http/errors';
 import { readBody, readId, readJson, readQuery } from '../../http/validate';
 import type { DirectoryEnv } from '../app';
+import { createToken, listTokens, revokeToken } from '../accessTokens';
 import type { DirectoryContext } from '../context';
 import { expiredDeviceCookies, findDevice, readDeviceToken, revokeDevices } from '../devices';
 import { appendCookies, currentMeta, currentSession, currentUser, freshSession, requireRecent } from '../middleware';
@@ -200,6 +202,47 @@ export function accountRoutes(ctx: DirectoryContext) {
     });
     await pushInvalidate(ctx, spaces, 'await');
     return c.json({ ok: true, revoked });
+  });
+
+  // Personal access tokens (directory/accessTokens.ts). Creating one needs the re-auth window, as adding a
+  // passkey does: a token is a credential. Revoking one tells the account's spaces at once (Cloudflare
+  // caches identities, §10.5), as signing other sessions out does.
+  r.get('/tokens', (c) => {
+    const body: TokenDTO[] = listTokens(db, currentUser(c).id, ctx.now());
+    return c.json(body);
+  });
+
+  r.post('/tokens', async (c) => {
+    const input = await readJson(c, tokenCreateInput);
+    const meta = currentMeta(c);
+    const { user } = freshSession(c, ctx);
+    requireRecent(c, ctx);
+    const nowMs = ctx.now();
+    let created: ReturnType<typeof createToken>;
+    try {
+      created = createToken(db, {
+        user,
+        name: input.name,
+        spaceId: input.spaceId,
+        maxRole: input.role,
+        expiresAt: input.expiresInDays === null ? null : new Date(nowMs + input.expiresInDays * 86_400_000).toISOString(),
+        meta,
+        nowMs,
+      });
+    } catch (err) {
+      // createToken's own checks: the space must be the account's, and an account holds at most 20 tokens.
+      const message = err instanceof Error ? err.message : 'The token could not be created';
+      throw badRequest(message, message.startsWith('No space') ? [{ path: 'spaceId', message }] : undefined);
+    }
+    return c.json<{ token: string; summary: TokenDTO }>({ token: created.token, summary: created.summary }, 201);
+  });
+
+  r.delete('/tokens/:tokenId', async (c) => {
+    const { user } = freshSession(c, ctx);
+    const id = readId(c, 'tokenId');
+    if (!revokeToken(db, { userId: user.id, tokenId: id, meta: currentMeta(c), nowMs: ctx.now() })) throw notFound('Token');
+    await pushInvalidate(ctx, memberSpaceIds(db, user.id), 'await');
+    return c.json({ ok: true });
   });
 
   r.get('/security-events', (c) => {
