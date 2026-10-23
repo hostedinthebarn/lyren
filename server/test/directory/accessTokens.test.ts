@@ -241,6 +241,15 @@ describe('the MCP endpoint (POST /api/mcp)', () => {
     const b = await tool('create_task', { projectId, title: 'Two' });
     const bulk = await tool('bulk_update_tasks', { ids: [a.id, b.id], patch: { priority: 3, addTagIds: [tag.id] } });
     expect(bulk.tasks.every((t: TaskDTO) => t.priority === 3)).toBe(true);
+    // Task dependencies: a link, the preview and the rebaseline, then its removal.
+    const late = await tool('create_task', { projectId, title: 'Late', dueDate: '2026-11-30' });
+    const waits = await tool('create_task', { projectId, title: 'Waits', dueDate: '2026-11-01' });
+    const linked = await tool('add_link', { id: waits.id, blockerId: late.id });
+    expect(linked).toMatchObject({ blockedBy: [late.id], adjustedDueDate: '2026-12-01', slipDays: 30 });
+    const preview = await tool('preview_rebaseline', { ids: [waits.id], today: '2026-10-20' });
+    expect(preview.items.map((i: { taskId: number }) => i.taskId)).toEqual([waits.id]);
+    expect((await tool('rebaseline', { projectId, today: '2026-10-20' })).items).toHaveLength(1);
+    expect(await tool('remove_link', { id: waits.id, blockerId: late.id })).toMatchObject({ blockedBy: [], dueDate: '2026-12-01' });
     expect(await tool('delete_task', { id: b.id })).toEqual({ ok: true });
 
     await tool('log_work', { taskId: a.id, date: '2026-10-20', minutes: 45 });

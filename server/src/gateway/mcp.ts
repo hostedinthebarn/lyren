@@ -20,10 +20,12 @@ import {
   milestoneUpdateInput,
   projectCreateInput,
   projectUpdateInput,
+  rebaselineInput,
   searchQueryInput,
   tagCreateInput,
   taskBulkUpdateInput,
   taskCreateInput,
+  taskLinkInput,
   taskQueryInput,
   taskUpdateInput,
   worklogCreateInput,
@@ -232,6 +234,38 @@ const TOOLS: Tool[] = [
     description: 'Delete a task for good, with its comments and work logs. Prefer update_task with archived: true unless asked to delete.',
     params: { id: idParam('The task id') },
     run: call('DELETE', (a) => `/api/tasks/${intOf(a, 'id')}`),
+  },
+  {
+    name: 'add_link',
+    description:
+      'Make one task wait on another (finish-to-start): blockerId must finish before task id can. Its blockers then push ' +
+      'the task\'s adjustedDueDate (a task read shows blockedBy, blocks, adjustedStartDate, adjustedDueDate and slipDays). ' +
+      'A link that would close a loop is refused.',
+    params: { id: idParam('The task that waits (the blocked task)') },
+    body: taskLinkInput,
+    run: call('POST', (a) => `/api/tasks/${intOf(a, 'id')}/blockers`, (a) => rest(a, 'id')),
+  },
+  {
+    name: 'remove_link',
+    description: 'Remove the link that makes task id wait on blockerId.',
+    params: { id: idParam('The blocked task id'), blockerId: idParam('The blocker task id') },
+    run: call('DELETE', (a) => `/api/tasks/${intOf(a, 'id')}/blockers/${intOf(a, 'blockerId')}`),
+  },
+  {
+    name: 'preview_rebaseline',
+    description:
+      'The slipped tasks of a project (projectId) or of a selection (ids), and the start and due dates a rebaseline would ' +
+      'give them (their adjusted dates). Changes nothing.',
+    body: rebaselineInput,
+    run: call('POST', () => '/api/tasks/rebaseline/preview', (a) => rest(a)),
+  },
+  {
+    name: 'rebaseline',
+    description:
+      'Accept the slip of a project\'s (projectId) or a selection\'s (ids) slipped tasks: their start and due dates move ' +
+      'to their adjusted dates, keeping each task\'s length. Run preview_rebaseline first and confirm with the person.',
+    body: rebaselineInput,
+    run: call('POST', () => '/api/tasks/rebaseline', (a) => rest(a)),
   },
   {
     name: 'get_project',
