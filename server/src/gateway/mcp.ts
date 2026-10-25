@@ -374,6 +374,27 @@ function inputSchema(tool: Tool): JsonObject {
   return schema;
 }
 
+/**
+ * Arguments a tool doesn't take. The API's schemas drop unknown keys without a word, so an assistant that
+ * guesses a field (update_task with blockedBy) would be told it worked when nothing changed. Checked at the
+ * top level only, and skipped for a body whose schema has no plain properties to check against.
+ */
+function unknownArguments(tool: Tool, args: JsonObject): string[] {
+  if (tool.body && !(z.toJSONSchema(tool.body, { io: 'input', unrepresentable: 'any' }) as JsonObject).properties) return [];
+  const known = new Set(Object.keys(inputSchema(tool).properties as JsonObject));
+  if (tool.name === 'get_task') known.add('ref');
+  return Object.keys(args).filter((k) => !known.has(k));
+}
+
+function unknownArgumentsMessage(tool: Tool, unknown: string[]): string {
+  const known = Object.keys(inputSchema(tool).properties as JsonObject).join(', ');
+  let text = `${tool.name} doesn't take ${unknown.join(', ')}. It takes: ${known}.`;
+  if (unknown.some((k) => /block|depend|link|predecessor/i.test(k))) {
+    text += ' To make one task wait for another, use add_link (id: the task that waits, blockerId: the task it waits for); remove_link undoes it.';
+  }
+  return text;
+}
+
 let toolList: JsonObject[] | null = null;
 function listTools(): JsonObject[] {
   toolList ??= TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: inputSchema(t) }));
@@ -417,6 +438,8 @@ async function dispatch(method: string, params: JsonObject, deps: McpDeps): Prom
       if (tool.space !== false && (typeof args.space !== 'string' || args.space === '')) {
         return { content: [{ type: 'text', text: 'space is required (from list_spaces)' }], isError: true };
       }
+      const unknown = unknownArguments(tool, args);
+      if (unknown.length > 0) return { content: [{ type: 'text', text: unknownArgumentsMessage(tool, unknown) }], isError: true };
       try {
         const result = await tool.run(args, deps);
         return { content: [{ type: 'text', text: result.text }], isError: result.isError };

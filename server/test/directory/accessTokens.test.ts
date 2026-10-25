@@ -260,6 +260,32 @@ describe('the MCP endpoint (POST /api/mcp)', () => {
     expect(JSON.stringify(activity)).toContain('task.created');
   });
 
+  it('refuses arguments a tool does not take, pointing dependency guesses at add_link', async () => {
+    const { issue, call, owner, projectId } = await setup();
+    const token = issue();
+    const tool = async (name: string, args: Record<string, unknown>) =>
+      (await call(token, 'POST', '/api/mcp', rpc(1, 'tools/call', { name, arguments: { space: owner.spaceId, ...args } }))).body.result as {
+        content: Array<{ text: string }>;
+        isError: boolean;
+      };
+    const task = JSON.parse((await tool('create_task', { projectId, title: 'Waits' })).content[0]!.text) as TaskDTO;
+
+    const guessed = await tool('update_task', { id: task.id, blockedBy: [1] });
+    expect(guessed.isError).toBe(true);
+    expect(guessed.content[0]!.text).toMatch(/update_task doesn't take blockedBy/);
+    expect(guessed.content[0]!.text).toMatch(/add_link/);
+
+    const typo = await tool('update_task', { id: task.id, titel: 'x' });
+    expect(typo.isError).toBe(true);
+    expect(typo.content[0]!.text).not.toMatch(/add_link/);
+    // Nothing was written by either refused call.
+    expect(JSON.parse((await tool('get_task', { id: task.id })).content[0]!.text).updatedAt).toBe(task.updatedAt);
+
+    // Known arguments still pass, including get_task's ref.
+    expect((await tool('get_task', { ref: task.ref })).isError).toBe(false);
+    expect((await tool('update_task', { id: task.id, title: 'Renamed' })).isError).toBe(false);
+  });
+
   it("applies the token's role: a viewer token's writes are tool errors", async () => {
     const { issue, call, owner, projectId } = await setup();
     const viewer = issue({ role: 'viewer' });
