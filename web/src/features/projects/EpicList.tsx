@@ -33,6 +33,8 @@ export interface EpicListProps {
   expandable?: boolean;
   isExpanded?: (epicId: number) => boolean;
   onExpandedChange?: (epicId: number, expanded: boolean) => void;
+  /** Expanded epics list only their open tasks. */
+  hideClosedTasks?: boolean;
   emptyText?: string;
 }
 
@@ -48,6 +50,7 @@ export function EpicList({
   expandable = false,
   isExpanded,
   onExpandedChange,
+  hideClosedTasks = false,
   emptyText = 'No epics yet.',
 }: EpicListProps) {
   const sid = useSpaceId();
@@ -83,6 +86,7 @@ export function EpicList({
             expandable={expandable}
             expanded={expandable && (isExpanded?.(epic.id) ?? false)}
             onExpandedChange={(open) => onExpandedChange?.(epic.id, open)}
+            hideClosedTasks={hideClosedTasks}
             onStatus={(status) => void save(epic, { status })}
             menu={write && epicMenuItems(epic, {
               open: () => navigate(epicUrl(sid, projectId, epic.id)),
@@ -118,6 +122,7 @@ function EpicRow({
   expandable,
   expanded,
   onExpandedChange,
+  hideClosedTasks,
   onStatus,
   menu,
 }: {
@@ -127,6 +132,7 @@ function EpicRow({
   expandable: boolean;
   expanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
+  hideClosedTasks: boolean;
   onStatus: (status: EpicDTO['status']) => void;
   /** false: the role may not change the epic (no menu). */
   menu: ReturnType<typeof epicMenuItems> | false;
@@ -195,11 +201,11 @@ function EpicRow({
         <div id={panelId} hidden={!expanded} className="pb-3 pl-3 pr-2 md:pl-12 md:pr-3">
           {expanded && (
             <TaskList
-              filter={{ projectIds: [projectId], epicIds: [epic.id] }}
+              filter={{ projectIds: [projectId], epicIds: [epic.id], ...(hideClosedTasks && { closedWithinDays: 0 }) }}
               toolbar={false}
               createDefaults={{ projectId, epicId: epic.id }}
               hide={['project', 'epic', 'milestone']}
-              emptyMessage="No tasks in this epic yet."
+              emptyMessage={hideClosedTasks && epic.stats.tasksTotal > 0 ? 'Every task in this epic is done.' : 'No tasks in this epic yet.'}
             />
           )}
         </div>
