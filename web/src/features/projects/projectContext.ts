@@ -5,6 +5,8 @@ import type { ProjectDTO } from '@shared/types';
 
 export interface ProjectOutletContext {
   project: ProjectDTO;
+  /** The overview hides done milestones, epics and tasks (the project menu's "Hide done"). */
+  hideDone: boolean;
 }
 
 /** The current project (only inside ProjectLayout's child routes, which render after it resolved). */

@@ -1,6 +1,7 @@
 // Project overview: description (inline-editable), summary stats, then the hierarchy —
 // milestones in order with their epics (each expandable to its tasks), epics without a
-// milestone, and tasks without an epic. Sections remember their open state per device.
+// milestone, and tasks without an epic. Sections remember their open state per device. "Hide done"
+// (project menu) leaves out closed milestones, epics and tasks.
 
 import { clsx } from 'clsx';
 import { ChevronRight, ChevronsDownUp, ChevronsUpDown, Milestone as MilestoneIcon, MoreHorizontal, Plus } from 'lucide-react';
@@ -18,7 +19,7 @@ import { TaskList } from '../tasks/TaskList';
 import { EditableMarkdown } from './EditableMarkdown';
 import { DateRange, StatTile } from './EntityMeta';
 import { EpicList } from './EpicList';
-import { buildHierarchy, isMilestoneClosed, moveWithinSubset, reorderSubset, type MilestoneSection } from './hierarchy';
+import { buildHierarchy, isMilestoneClosed, moveWithinSubset, openHierarchy, reorderSubset, type MilestoneSection } from './hierarchy';
 import { milestoneMenuItems } from './hierarchyMenus';
 import { LifecyclePicker } from './LifecycleStatus';
 import { useProjectContext } from './projectContext';
@@ -28,9 +29,9 @@ import { useStillInBootstrap } from './leaveSave';
 import { useReorder, useSaveMilestone, useSaveProject } from './useHierarchyMutations';
 
 export default function ProjectOverview() {
-  const { project } = useProjectContext();
+  const { project, hideDone } = useProjectContext();
   // Keyed so per-project persisted UI state is re-read when switching projects.
-  return <Overview key={project.id} project={project} />;
+  return <Overview key={project.id} project={project} hideDone={hideDone} />;
 }
 
 type OpenState = Record<string, boolean>;
@@ -51,12 +52,15 @@ function useOverviewState(projectId: number) {
   );
 }
 
-function Overview({ project }: { project: ProjectDTO }) {
+function Overview({ project, hideDone }: { project: ProjectDTO; hideDone: boolean }) {
   const { write } = useSpace().permissions;
   const { milestonesByProject, epicsByProject } = useLookups();
   const milestones = milestonesByProject.get(project.id) ?? [];
   const epics = epicsByProject.get(project.id) ?? [];
-  const { sections, loose } = buildHierarchy(milestones, epics);
+  const hierarchy = buildHierarchy(milestones, epics);
+  // Reorders still send every milestone id; hidden ones keep their slots (reorderSubset).
+  const allMilestoneIds = hierarchy.sections.map((s) => s.milestone.id);
+  const { sections, loose } = hideDone ? openHierarchy(hierarchy) : hierarchy;
   const allEpicIds = [...epics].sort((a, b) => a.position - b.position || a.id - b.id).map((e) => e.id);
   const dialogs = useHierarchyDialogs(project.id);
   const saveProject = useSaveProject();
@@ -109,7 +113,9 @@ function Overview({ project }: { project: ProjectDTO }) {
             )}
           </div>
         </div>
-        {sections.length === 0 ? (
+        {sections.length === 0 && milestones.length > 0 ? (
+          <p className="text-sm text-fg-muted">Every milestone is done.</p>
+        ) : sections.length === 0 ? (
           <Card padding="none" className="border-dashed shadow-none">
             <EmptyState
               size="sm"
@@ -129,8 +135,10 @@ function Overview({ project }: { project: ProjectDTO }) {
           <MilestoneList
             project={project}
             sections={sections}
+            allMilestoneIds={allMilestoneIds}
             milestones={milestones}
             allEpicIds={allEpicIds}
+            hideDone={hideDone}
             dialogs={dialogs}
             isOpen={milestoneOpen}
             setOpen={(m, open) => ui.setOpen(`m:${m.id}`, open)}
@@ -164,7 +172,14 @@ function Overview({ project }: { project: ProjectDTO }) {
             expandable
             isExpanded={epicExpanded}
             onExpandedChange={setEpicExpanded}
-            emptyText={epics.length === 0 ? 'No epics yet. Epics group related tasks.' : 'Every epic belongs to a milestone.'}
+            hideClosedTasks={hideDone}
+            emptyText={
+              epics.length === 0
+                ? 'No epics yet. Epics group related tasks.'
+                : hierarchy.loose.length > 0
+                  ? 'Every epic without a milestone is done.'
+                  : 'Every epic belongs to a milestone.'
+            }
           />
         </Card>
       </Disclosure>
@@ -176,11 +191,11 @@ function Overview({ project }: { project: ProjectDTO }) {
         contentClassName="mt-2"
       >
         <TaskList
-          filter={{ projectIds: [project.id], epicIds: [null] }}
+          filter={{ projectIds: [project.id], epicIds: [null], ...(hideDone && { closedWithinDays: 0 }) }}
           toolbar={false}
           createDefaults={{ projectId: project.id }}
           hide={['project', 'epic', 'milestone']}
-          emptyMessage={project.stats.tasksTotal === 0 ? 'No tasks yet.' : 'Every task belongs to an epic.'}
+          emptyMessage={project.stats.tasksTotal === 0 ? 'No tasks yet.' : hideDone ? 'No open tasks without an epic.' : 'Every task belongs to an epic.'}
         />
       </Disclosure>
 
@@ -223,8 +238,10 @@ const sectionName = (s: MilestoneSection) => s.milestone.name;
 function MilestoneList({
   project,
   sections,
+  allMilestoneIds,
   milestones,
   allEpicIds,
+  hideDone,
   dialogs,
   isOpen,
   setOpen,
@@ -233,8 +250,11 @@ function MilestoneList({
 }: {
   project: ProjectDTO;
   sections: MilestoneSection[];
+  /** Every milestone id of the project in position order (reorder sends the full set). */
+  allMilestoneIds: number[];
   milestones: readonly MilestoneDTO[];
   allEpicIds: number[];
+  hideDone: boolean;
   dialogs: HierarchyDialogs;
   isOpen: (m: MilestoneDTO) => boolean;
   setOpen: (m: MilestoneDTO, open: boolean) => void;
@@ -258,7 +278,7 @@ function MilestoneList({
         getLabel={sectionName}
         noun="milestones"
         disabled={!write}
-        onMove={(activeId, overId) => apply(reorderSubset(ids, ids, activeId, overId))}
+        onMove={(activeId, overId) => apply(reorderSubset(allMilestoneIds, ids, activeId, overId))}
         renderItem={(section, sortable) => {
           const m = section.milestone;
           const index = ids.indexOf(m.id);
@@ -282,8 +302,8 @@ function MilestoneList({
                 setStatus,
                 addEpic: () => dialogs.newEpic(m.id),
                 move: {
-                  up: index > 0 ? () => apply(moveWithinSubset(ids, ids, m.id, -1)) : null,
-                  down: index < ids.length - 1 ? () => apply(moveWithinSubset(ids, ids, m.id, 1)) : null,
+                  up: index > 0 ? () => apply(moveWithinSubset(allMilestoneIds, ids, m.id, -1)) : null,
+                  down: index < ids.length - 1 ? () => apply(moveWithinSubset(allMilestoneIds, ids, m.id, 1)) : null,
                 },
                 remove: () => dialogs.deleteMilestone(m),
               })}
@@ -297,7 +317,8 @@ function MilestoneList({
                 expandable
                 isExpanded={epicExpanded}
                 onExpandedChange={setEpicExpanded}
-                emptyText="No epics in this milestone yet."
+                hideClosedTasks={hideDone}
+                emptyText={hideDone && m.stats.epicsTotal > 0 ? 'Every epic in this milestone is done.' : 'No epics in this milestone yet.'}
               />
               {write && (
                 <div className="border-t border-border px-2 py-1.5 md:px-3">

@@ -6,6 +6,7 @@ import {
   isOverdue,
   moveWithinSubset,
   nextMilestone,
+  openHierarchy,
   reorderSubset,
 } from './hierarchy';
 import { baseProjectKey, normalizeKeyInput, projectKeyError, suggestProjectKey } from './projectKey';
@@ -91,6 +92,29 @@ describe('hierarchy', () => {
       [10, [2, 1]],
     ]);
     expect(h.loose.map((e) => e.id)).toEqual([3, 4]);
+  });
+
+  it('"Hide done" drops closed milestones and epics, keeping the order', () => {
+    const done = (e: EpicDTO, status: EpicDTO['status']): EpicDTO => ({ ...e, status });
+    const h = openHierarchy(
+      buildHierarchy(
+        [milestone(10, 0), milestone(11, 1, 'completed'), milestone(12, 2, 'cancelled'), milestone(13, 3, 'active')],
+        [
+          epic(1, 0, 10),
+          done(epic(2, 1, 10), 'done'),
+          epic(3, 2, 10),
+          epic(4, 3, 11),
+          done(epic(5, 4, 13), 'cancelled'),
+          done(epic(6, 5, null), 'done'),
+          epic(7, 6, null),
+        ],
+      ),
+    );
+    expect(h.sections.map((s) => [s.milestone.id, s.epics.map((e) => e.id)])).toEqual([
+      [10, [1, 3]],
+      [13, []],
+    ]);
+    expect(h.loose.map((e) => e.id)).toEqual([7]);
   });
 
   it('finds the next open milestone', () => {

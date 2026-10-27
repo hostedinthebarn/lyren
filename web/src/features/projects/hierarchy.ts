@@ -36,6 +36,17 @@ export function buildHierarchy(milestones: readonly MilestoneDTO[], epics: reado
 export const isMilestoneClosed = (status: MilestoneStatus) => status === 'completed' || status === 'cancelled';
 export const isEpicClosed = (status: EpicStatus) => status === 'done' || status === 'cancelled';
 
+/** The hierarchy without closed milestones and epics (the overview's "Hide done"). */
+export function openHierarchy({ sections, loose }: Hierarchy): Hierarchy {
+  const openEpics = (epics: EpicDTO[]) => epics.filter((e) => !isEpicClosed(e.status));
+  return {
+    sections: sections
+      .filter((s) => !isMilestoneClosed(s.milestone.status))
+      .map((s) => ({ ...s, epics: openEpics(s.epics) })),
+    loose: openEpics(loose),
+  };
+}
+
 /** True when a not-yet-closed milestone/epic is past its due date. */
 export function isOverdue(dueDate: ISODate | null, closed: boolean, today: ISODate): boolean {
   return !closed && dueDate !== null && dueDate < today;

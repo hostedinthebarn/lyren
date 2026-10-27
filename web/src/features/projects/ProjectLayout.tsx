@@ -3,7 +3,7 @@
 // Tasks / Activity tabs, and the child route. Milestone and epic pages render their own header (breadcrumb Project › …), so
 // for them this layout only provides the project through the outlet context.
 
-import { Archive, ArchiveRestore, FolderX, Info, Milestone as MilestoneIcon, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, Eye, EyeOff, FolderX, Info, Milestone as MilestoneIcon, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router';
 import { PROJECT_STATUSES } from '@shared/constants';
@@ -15,6 +15,7 @@ import { PageHeader } from '../../components/layout/PageHeader';
 import { isBoolean, usePersistentState } from '../../components/layout/usePersistentState';
 import { ButtonLink, EmptyState, IconButton, Markdown, normalizeMenuItems, toast } from '../../components/ui';
 import { useDocumentTitle } from '../../lib/hooks';
+import { spaceKey } from '../../lib/spaceStorage';
 import { projectUrl } from '../../lib/taskLinks';
 import { DeleteProjectDialog } from './DeleteDialogs';
 import { LifecycleBadge, lifecycleMeta } from './LifecycleStatus';
@@ -31,6 +32,10 @@ const SECTION_TITLES: Record<Exclude<Section, 'overview' | 'entity'>, string> = 
   activity: 'Activity',
 };
 
+type Flags = Record<string, boolean>;
+const isFlags = (v: unknown): v is Flags =>
+  typeof v === 'object' && v !== null && !Array.isArray(v) && Object.values(v).every(isBoolean);
+
 function sectionOf(pathname: string, base: string): Section {
   const first = pathname.slice(base.length).replace(/^\/+/, '').split('/')[0] ?? '';
   if (first === 'board' || first === 'tasks' || first === 'activity') return first;
@@ -40,12 +45,15 @@ function sectionOf(pathname: string, base: string): Section {
 
 export default function ProjectLayout() {
   const sp = useSpacePath();
+  const sid = useSpaceId();
   const { projectId: param = '' } = useParams();
   const id = parseRouteId(param);
   const { projectById } = useLookups();
   const project = id === null ? undefined : projectById.get(id);
   const { pathname } = useLocation();
   const section = sectionOf(pathname, sp(`/projects/${param}`));
+  // "Hide done" on the overview, remembered per project on this device.
+  const [hideDoneByProject, setHideDoneByProject] = usePersistentState<Flags>(spaceKey(sid, 'overview.hideDone'), {}, isFlags);
   // Set while this page deletes the project, so its disappearance doesn't flash "not found".
   const deletingRef = useRef<number | null>(null);
 
@@ -64,10 +72,17 @@ export default function ProjectLayout() {
     if (deletingRef.current !== null) return null;
     return <ProjectNotFound />;
   }
-  const context: ProjectOutletContext = { project };
+  const hideDone = hideDoneByProject[project.id] ?? false;
+  const context: ProjectOutletContext = { project, hideDone };
   if (section === 'entity') return <Outlet context={context} />;
   return (
-    <ProjectChrome project={project} section={section} deletingRef={deletingRef}>
+    <ProjectChrome
+      project={project}
+      section={section}
+      deletingRef={deletingRef}
+      hideDone={hideDone}
+      onHideDoneChange={(hide) => setHideDoneByProject((s) => ({ ...s, [project.id]: hide }))}
+    >
       <Outlet context={context} />
     </ProjectChrome>
   );
@@ -91,11 +106,15 @@ function ProjectChrome({
   project,
   section,
   deletingRef,
+  hideDone,
+  onHideDoneChange,
   children,
 }: {
   project: ProjectDTO;
   section: Exclude<Section, 'entity'>;
   deletingRef: RefObject<number | null>;
+  hideDone: boolean;
+  onHideDoneChange: (hide: boolean) => void;
   children: ReactNode;
 }) {
   const sp = useSpacePath();
@@ -122,6 +141,11 @@ function ProjectChrome({
   };
 
   const menu = normalizeMenuItems([
+    section === 'overview' &&
+      (hideDone
+        ? { label: 'Show done', icon: <Eye />, onSelect: () => onHideDoneChange(false) }
+        : { label: 'Hide done', icon: <EyeOff />, onSelect: () => onHideDoneChange(true) }),
+    { separator: true },
     write && { label: 'Edit project…', icon: <Pencil />, onSelect: () => setEditOpen(true) },
     write && {
       label: 'Status',
