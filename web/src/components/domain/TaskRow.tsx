@@ -30,6 +30,7 @@ import { taskActions } from './taskActions';
 import type { ExtraMenuItems } from './taskActionItems';
 import { resolveRowFields, taskClosedKind, type CardFields, type RowHideKey } from './taskDisplay';
 import { TagList } from './Tags';
+import { UserAvatar } from './UserAvatar';
 import { useSharedToday } from './useSharedToday';
 
 export interface TaskRowProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onClick' | 'children'> {
@@ -249,6 +250,9 @@ const TaskRowImpl = forwardRef<HTMLDivElement, TaskRowProps>(function TaskRow(
             {f.estimate && <EstimateLabel value={task.estimate} unit={lookups.settings.estimateUnit} />}
             {f.commentCount && task.commentCount > 0 && <CommentCountLabel count={task.commentCount} />}
             {f.worklog && task.worklogMinutes > 0 && <DurationLabel minutes={task.worklogMinutes} plain />}
+            {task.assigneeId !== null && (
+              <UserAvatar user={lookups.personById.get(task.assigneeId)} size="xs" />
+            )}
           </div>
         </div>
 

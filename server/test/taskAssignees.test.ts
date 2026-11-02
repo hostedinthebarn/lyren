@@ -68,11 +68,11 @@ describe('assigning', () => {
     }
     const viewer = await t.create({ assigneeId: t.viewer.user.id });
     expect(viewer.status).toBe(400);
-    expect(viewer.body.error.details).toEqual([{ path: 'assigneeId', message: "Vic is a viewer, and a viewer can't be assigned a task" }]);
+    expect((viewer.body as any).error.details).toEqual([{ path: 'assigneeId', message: "Vic is a viewer, and a viewer can't be assigned a task" }]);
     for (const id of [t.outsider.user.id, 9999]) {
       const res = await t.create({ assigneeId: id });
       expect(res.status).toBe(400);
-      expect(res.body.error.details).toEqual([{ path: 'assigneeId', message: `User ${id} is not a member of this space` }]);
+      expect((res.body as any).error.details).toEqual([{ path: 'assigneeId', message: `User ${id} is not a member of this space` }]);
     }
     const task = (await t.create({})).body;
     expect((await t.patch(task.id, { assigneeId: t.viewer.user.id })).status).toBe(400);

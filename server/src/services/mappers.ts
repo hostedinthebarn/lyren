@@ -175,6 +175,7 @@ export function toPersonDTO(row: MirrorUserRow): PersonDTO {
     displayName: row.display_name,
     kind: row.kind,
     isMember: row.is_member === 1,
+    role: row.role,
     deleted: row.deleted === 1,
   };
 }

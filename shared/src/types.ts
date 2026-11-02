@@ -465,6 +465,11 @@ export interface PersonDTO {
   isMember: boolean;
   /** The account no longer exists (shown with "(deleted account)"). */
   deleted: boolean;
+  /**
+   * A member's role in the space, null for everyone else (and for a member the space hasn't synced since migration
+   * 5). The assignee picker offers the members who aren't viewers (docs/design/task-assignees.md).
+   */
+  role: 'owner' | 'admin' | 'member' | 'viewer' | null;
 }
 
 /** GET /api/s/:spaceId/bootstrap: what every page of a space needs at start. */

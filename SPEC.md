@@ -664,7 +664,7 @@ Boards: `projectId` is immutable (create only). For project boards the server fo
 ### Filter semantics (`TaskFilter`, implemented by `matchesTaskFilter` in shared/src/filter.ts)
 All present criteria are ANDed; within an array values are ORed; **an omitted or empty array means "no
 constraint"**. `ids` restricts the result to those tasks (the palette refreshes its Recent list with it).
-`null` inside `milestoneIds`/`epicIds`/`tagIds` means "has none". The due criteria and the `dueDate` sort go by
+`null` inside `milestoneIds`/`epicIds`/`assigneeIds`/`tagIds` means "has none" (`assigneeIds`: unassigned, docs/design/task-assignees.md). The due criteria and the `dueDate` sort go by
 `effectiveDueDate`: a slipped task's adjusted due date, else its own (the SQL passes the slipped tasks' dates as
 `:slips`); `slipped: true` keeps the slipped tasks only. `tagMode: 'all'` requires
 every listed (non-null) tag (only `[null]` → untagged). `due` presets are ORed and resolved against the

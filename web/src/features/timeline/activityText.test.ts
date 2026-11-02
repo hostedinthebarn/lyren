@@ -111,6 +111,15 @@ describe('describeActivity — one sentence per action', () => {
     );
   });
 
+  it('says who a task was assigned to, unassigned from, or moved between (task assignees)', () => {
+    const say = (from: number | null, to: number | null, fromLabel: string | null, toLabel: string | null) =>
+      describeActivity(entry('task.updated', { changes: [{ field: 'assignee', from, to, fromLabel, toLabel }] }), lookups);
+    expect(say(null, 2, null, 'Ann')).toBe('Alex assigned it to Ann');
+    expect(say(2, null, 'Ann', null)).toBe('Alex unassigned Ann');
+    expect(say(2, 3, 'Ann', 'Bob')).toBe('Alex reassigned it from Ann to Bob');
+    expect(say(2, 3, null, 'Bob')).toBe('Alex reassigned it from a former member to Bob');
+  });
+
   it('falls back to "updated the task" for an empty change list', () => {
     expect(describeActivity(entry('task.updated', { changes: [] }))).toBe('Alex updated the task');
     expect(describeActivity(entry('task.updated', {}))).toBe('Alex updated the task');
