@@ -240,6 +240,7 @@ function checkIntegrity(version: 1 | 2, { frame, rows }: { frame: Frame; rows: R
     if (numbers.has(numberKey)) add(`tasks.${i}.number`, `Task ${t.id}: number ${t.number} is used twice in project ${t.projectId}`);
     numbers.add(numberKey);
     userRef(`tasks.${i}.createdBy`, `Task ${t.id}`, t.createdBy);
+    userRef(`tasks.${i}.assigneeId`, `Task ${t.id}`, 'assigneeId' in t ? (t.assigneeId as number | null | undefined) : null);
     const blockedBy = 'blockedBy' in t && Array.isArray(t.blockedBy) ? (t.blockedBy as number[]) : [];
     const unknownBlockers = [...new Set(blockedBy)].filter((id) => !taskIds.has(id) || id === t.id);
     if (unknownBlockers.length > 0) {

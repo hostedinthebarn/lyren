@@ -513,7 +513,7 @@ describe('reading a backup set refuses foreign and malicious archives', () => {
       return new Uint8Array(fs.readFileSync(file));
     };
     expect(() => extract(build({ 'directory.db': newer(part('directory.db'), '9', '9') }))).toThrow(new BackupError(NEWER_BACKUP));
-    expect(() => extract(build({ [second!.file]: newer(part(second!.file), '9', '5') }))).toThrow(new BackupError(NEWER_BACKUP));
+    expect(() => extract(build({ [second!.file]: newer(part(second!.file), '9', String(SPACE_MIGRATIONS.migrations.length + 1)) }))).toThrow(new BackupError(NEWER_BACKUP));
     // Newer but additive (compatible_from within this build): usable, as migrate allows (§3.7).
     expect(extract(build({ 'directory.db': newer(part('directory.db'), '9', '1') })).directory).toMatchObject({ version: 9, newer: false });
   });

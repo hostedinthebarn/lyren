@@ -12,6 +12,8 @@ export interface MirrorUserRow {
   /** Accounts only; null after the account was deleted. */
   email: string | null;
   is_member: number;
+  /** A member's role in the space (from spaceSync); null for everyone else. */
+  role: 'owner' | 'admin' | 'member' | 'viewer' | null;
   /** The directory account no longer exists. */
   deleted: number;
   updated_at: string;
@@ -102,6 +104,8 @@ export interface TaskRow {
   completed_at: string | null;
   archived_at: string | null;
   created_by: number | null;
+  /** The member who owns the task (docs/design/task-assignees.md); null when unassigned. */
+  assignee_id: number | null;
   created_at: string;
   updated_at: string;
   /** JSON array of the task's tag ids, ascending: kept from task_tags by triggers (space/schema.ts, migration 2). */

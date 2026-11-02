@@ -589,12 +589,16 @@ describe('refusals', () => {
     for (const file of [text, other]) {
       expect(() => stageRestore({ dbPath, source: file, nowMs: NOW })).toThrow(/is not a Lyren Plan backup: a backup set \(\.tar\), /);
     }
-    // A page in the middle overwritten: quick_check finds it before anything is staged.
+    // A page in use overwritten: quick_check finds it before anything is staged. The page holding the tasks table's
+    // root, found by name, so a schema change that moves pages around can't make this one a free page.
     const big = path.join(tempDir(), 'big.db');
     fs.copyFileSync(snapshot, big);
+    const probe = new DatabaseSync(big);
+    const pageSize = (probe.prepare('PRAGMA page_size').get() as { page_size: number }).page_size;
+    const root = (probe.prepare("SELECT rootpage FROM sqlite_schema WHERE name = 'tasks'").get() as { rootpage: number }).rootpage;
+    probe.close();
     const fd = fs.openSync(big, 'r+');
-    const size = fs.fstatSync(fd).size;
-    fs.writeSync(fd, Buffer.alloc(4096, 0xab), 0, 4096, Math.max(4096, size - 8192));
+    fs.writeSync(fd, Buffer.alloc(pageSize, 0xab), 0, pageSize, (root - 1) * pageSize);
     fs.closeSync(fd);
     expect(() => stageRestore({ dbPath, source: big, nowMs: NOW })).toThrow(new RestoreError("The backup's big.db is damaged (database disk image is malformed); nothing was staged."));
     expect(fs.existsSync(path.join(live.dataDir, PENDING_FOLDER))).toBe(false);

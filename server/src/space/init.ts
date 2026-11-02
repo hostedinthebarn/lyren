@@ -26,7 +26,7 @@ export function initSpaceDb(db: Db, init: SpaceInit, o: { appVersion?: string } 
     if (spaceId !== null && spaceId !== init.spaceId) {
       throw new Error(`This database belongs to space ${spaceId}, not ${init.spaceId}`);
     }
-    healActor(db, init.owner, nowIso());
+    healActor(db, { ...init.owner, role: 'owner' }, nowIso());
     ensureDefaults(db);
     // Later syncs own space_name and sync_version; a repeated init must not set them back.
     db.run(META_ADD, { key: 'space_id', value: init.spaceId });

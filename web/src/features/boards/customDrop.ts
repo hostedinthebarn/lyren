@@ -92,6 +92,7 @@ export function dropPatchWarnings(
     completedAt: null,
     archivedAt: patch.archived ? '1970-01-01T00:00:00.000Z' : null,
     createdBy: null,
+    assigneeId: null,
     createdAt: '',
     updatedAt: '',
     tags: (patch.addTagIds ?? []).map((id) => ({ id, name: ctx.lookups.tagById.get(id)?.name ?? '', color: '#000000' })),

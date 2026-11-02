@@ -65,7 +65,10 @@ describe('sync', () => {
       name: 'S',
       status: 'active' as const,
       syncVersion: 2,
-      members: [{ userId: OWNER_ID, displayName: 'Owner', email: 'owner@example.com' }, { userId: 2, displayName: 'B', email: null }],
+      members: [
+        { userId: OWNER_ID, displayName: 'Owner', email: 'owner@example.com', role: 'owner' as const },
+        { userId: 2, displayName: 'B', email: null, role: 'member' as const },
+      ],
       others: [],
     };
     expect(applySync(db, payload, T)).toBe(2); // B inserted, space_name changed

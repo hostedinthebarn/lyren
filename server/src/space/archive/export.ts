@@ -64,7 +64,9 @@ function referencedUserIds(db: Db): Set<number> {
   const add = (...values: Array<number | null>) => {
     for (const v of values) if (v !== null) ids.add(v);
   };
-  for (const page of pages<{ id: number; a: number | null }>(db, 'tasks', 'id, created_by AS a')) for (const r of page) add(r.a);
+  for (const page of pages<{ id: number; a: number | null; b: number | null }>(db, 'tasks', 'id, created_by AS a, assignee_id AS b')) {
+    for (const r of page) add(r.a, r.b);
+  }
   for (const table of ['comments', 'work_logs', 'activity']) {
     for (const page of pages<{ id: number; a: number | null; b: number | null }>(db, table, 'id, user_id AS a, imported_by AS b')) {
       for (const r of page) add(r.a, r.b);
@@ -193,6 +195,7 @@ export function* archivePieces(db: Db, info: ArchiveInfo): Generator<string> {
     updatedAt: t.updated_at,
     tagIds: parseJson(t.tag_ids, []) as number[],
     ...(blockers.has(t.id) ? { blockedBy: blockers.get(t.id)! } : {}),
+    ...(t.assignee_id !== null ? { assigneeId: t.assignee_id } : {}),
   }));
   yield* list<CommentRow>('comments', pages<CommentRow>(db, 'comments'), (cm) => ({
     id: cm.id,

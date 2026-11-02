@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Db } from '../../src/core/db';
 import { migrate, readSchemaState, withDeferredForeignKeys, type Migration, type MigrationSet } from '../../src/core/migrate';
 import { DIRECTORY_MIGRATIONS, DIRECTORY_V1 } from '../../src/directory/schema';
-import { SPACE_MIGRATIONS, SPACE_V1, SPACE_V4 } from '../../src/space/schema';
+import { SPACE_MIGRATIONS, SPACE_V1, SPACE_V4, SPACE_V5 } from '../../src/space/schema';
 
 export type WithDb = <T>(body: (db: Db) => T) => Promise<T>;
 
@@ -662,8 +662,8 @@ export function defineDbContract(kind: Db['kind'], withDb: WithDb, options: DbCo
         },
         {
           set: SPACE_MIGRATIONS,
-          // Migration 4 adds task_links (task dependencies).
-          ddl: SPACE_V1 + SPACE_V4,
+          // Migration 4 adds task_links (task dependencies), migration 5 tasks.assignee_id and its index.
+          ddl: SPACE_V1 + SPACE_V4 + SPACE_V5,
           tables: [
             '_meta', 'activity', 'boards', 'comments', 'epics', 'milestones', 'projects', 'settings', 'statuses', 'tags',
             'task_links', 'task_tags', 'tasks', 'users', 'work_logs',
@@ -880,8 +880,8 @@ export function defineDbContract(kind: Db['kind'], withDb: WithDb, options: DbCo
               { id, ...t },
             );
           }
-          expect(migrate(db, SPACE_MIGRATIONS, { appVersion: '2.0.1' })).toEqual({ from: 3, to: 4 });
-          expect(meta(db)).toMatchObject({ version: '4', compatible_from: '1' });
+          expect(migrate(db, SPACE_MIGRATIONS, { appVersion: '2.0.1' })).toEqual({ from: 3, to: SPACE_MIGRATIONS.migrations.length });
+          expect(meta(db)).toMatchObject({ version: String(SPACE_MIGRATIONS.migrations.length), compatible_from: '1' });
           db.run('INSERT INTO task_links (blocker_id, blocked_id, created_at) VALUES (1, 2, :t), (2, 3, :t)', t);
           expect(() => db.run('INSERT INTO task_links (blocker_id, blocked_id, created_at) VALUES (3, 3, :t)', t)).toThrow(/CHECK/);
           expect(() => db.run('INSERT INTO task_links (blocker_id, blocked_id, created_at) VALUES (1, 9, :t)', t)).toThrow(/FOREIGN KEY/);

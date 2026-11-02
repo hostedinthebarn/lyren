@@ -3,7 +3,7 @@
 // users mirror in place of the accounts (§3.5), fold columns for case-insensitive uniqueness and
 // search (§3.4), import provenance on comments, work logs and activity (§8.6), and _meta (§3.7);
 // migration 2 adds tasks.tag_ids, migration 3 tasks.comment_count and tasks.worklog_minutes, migration 4
-// task_links. Every other
+// task_links, migration 5 tasks.assignee_id and users.role. Every other
 // table and column is exactly as in db/schema.ts V1, so the route and service SQL keeps working. Append new migrations to SPACE_MIGRATIONS and never edit
 // one that has shipped.
 //
@@ -304,11 +304,27 @@ CREATE TABLE task_links (
 CREATE INDEX task_links_blocked ON task_links(blocked_id);
 `;
 
+/**
+ * Migration 5 (docs/design/task-assignees.md): a task's assignee, and the space role of each member in the users
+ * mirror, so the space can tell who may be assigned (members, admins and owners; never a viewer). The role comes
+ * with the directory's sync (spaceSync); forgetting the applied sync_version makes the next request pull it, so
+ * the existing members' roles arrive without waiting for a membership change. An assignee who leaves the space
+ * keeps their tasks (the row stays, is_member = 0), as a task's creator does. An older build never reads either
+ * column, so this is compatible from 1.
+ */
+export const SPACE_V5 = /* sql */ `
+ALTER TABLE users ADD COLUMN role TEXT CHECK (role IN ('owner', 'admin', 'member', 'viewer'));
+ALTER TABLE tasks ADD COLUMN assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX tasks_assignee ON tasks(assignee_id);
+DELETE FROM _meta WHERE key = 'sync_version';
+`;
+
 const MIGRATIONS: ReadonlyArray<Migration> = [
   { up: (db) => db.exec(SPACE_V1) },
   { up: (db) => db.exec(SPACE_V2), compatibleFrom: 1 },
   { up: (db) => db.exec(SPACE_V3), compatibleFrom: 1 },
   { up: (db) => db.exec(SPACE_V4), compatibleFrom: 1 },
+  { up: (db) => db.exec(SPACE_V5), compatibleFrom: 1 },
 ];
 
 export const SPACE_MIGRATIONS: MigrationSet = { schema: 'space', migrations: MIGRATIONS };

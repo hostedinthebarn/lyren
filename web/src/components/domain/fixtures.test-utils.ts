@@ -90,6 +90,7 @@ export function task(extra: Partial<TaskDTO> = {}): TaskDTO {
     completedAt: null,
     archivedAt: null,
     createdBy: 1,
+    assigneeId: null,
     createdAt: TS,
     updatedAt: TS,
     tags: [],
