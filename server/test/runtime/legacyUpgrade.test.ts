@@ -214,7 +214,7 @@ async function expectUpgraded(f: LegacyFolder, o: { snapshots?: number } = {}): 
   expect(meta.get('space_id')).toBe(spaceId);
   expect(meta.get('space_name')).toBe(SPACE_NAME);
   expect(meta.get('sync_version')).toBe('1');
-  expect(meta.get('legacy_source')).toMatch(new RegExp(`^${path.basename(cfg.dbPath).replace('.', '\\.')} v1 \\d{4}-\\d\\d-\\d\\dT[\\d-]+Z$`));
+  expect(meta.get('legacy_source')).toMatch(new RegExp(`^${path.basename(cfg.dbPath).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} v1 \\d{4}-\\d\\d-\\d\\dT[\\d-]+Z$`));
   expect(JSON.parse(meta.get('write_state') as string)).toMatchObject({ rows: 0 });
   for (const file of [cfg.dbPath, spaceFile]) expect(rows(file, 'PRAGMA user_version')).toEqual([{ user_version: 100 }]);
   return spaceId;
