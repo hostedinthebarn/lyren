@@ -7,7 +7,7 @@
   // wait for a cached session to run out (the documented logout lag, §10.5).
   "name": "lyren-plan-test",
   "main": "./entry.ts",
-  "compatibility_date": "2026-10-01",
+  "compatibility_date": "2026-11-02",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "./fixtures/assets",

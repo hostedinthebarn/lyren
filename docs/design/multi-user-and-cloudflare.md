@@ -3573,7 +3573,7 @@ from the directory and space apps, as on Node, plus HSTS from the Worker (§10.2
   "name": "lyren-plan",
   "main": "server/src/runtime/cloudflare/worker.ts",
   "tsconfig": "./tsconfig.worker.json",
-  "compatibility_date": "2026-10-01",
+  "compatibility_date": "2026-11-02",
   "compatibility_flags": ["nodejs_compat"],
   "build": { "command": "node scripts/cf/build-web.mjs", "watch_dir": "web/src" },
   "assets": {
@@ -3603,8 +3603,8 @@ from the directory and space apps, as on Node, plus HSTS from the Worker (§10.2
 - **No** `account_id`, `routes`, custom domains, `vars` or secrets in the file. The Worker gets its code
   defaults (Appendix B, CF column). A deployer overrides them as variables in the dashboard (kept across deploys
   by `keep_vars`), with `--var NAME:value` (the GitHub workflow does this, §10.10), or locally in `.dev.vars`.
-- `compatibility_date` must not be later than the date of the workerd bundled by the pinned wrangler (2026-10-01
-  for wrangler 4.147.0). Raise both together.
+- `compatibility_date` must not be later than the date of the workerd bundled by the pinned wrangler (2026-11-02
+  for wrangler 4.156.2). Raise both together.
 - The legacy `migrations` array with `new_sqlite_classes` is the conservative form (the declarative `exports`
   map works locally, but with the Deploy button it is unverified).
 - The `tsconfig` field gives Wrangler's bundler the `@shared/*` path. If a Wrangler version ignores it, use
@@ -4432,7 +4432,7 @@ appends its own section. P6 follows P5, because its signup, invitation and reset
   (exclusions); `vitest.config.ts` (projects); `server/test-workers/{wrangler.test.jsonc,entry.ts,
   fixtures/assets/index.html,db.contract.test.ts}`; `server/test/contract/db.contract.ts`;
   `server/test/db.contract.node.test.ts`; `package.json` devDependencies `wrangler` (≥ 4.147.0),
-  `@cloudflare/vitest-plugin` (≥ 1.3.6), `@cloudflare/workers-types` (≥ 5.20261001.1).
+  `@cloudflare/vitest-plugin` (≥ 1.3.6), `@cloudflare/workers-types` (≥ 5.20261102.1).
 - `Deps.db` stays typed `NodeDb` until P2 (the old single app still uses `backupTo`). Neutral modules import
   `type Db`. The portability checks are on, except the `lyren_lower` check, which P2 enables. `core/migrate.ts`
   (§3.7, including `withDeferredForeignKeys`) is tested with a test-only `MigrationSet`; the contract cases that

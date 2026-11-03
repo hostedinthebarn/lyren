@@ -100,9 +100,9 @@ report it instead.
 | Runtime | Node.js ≥ 22.13 (dev: 24). **`node:sqlite`** built-in (no native modules). |
 | Server  | Hono 4.13.9, pinned exactly (the gate relies on `matchedRoutes`, design Appendix D 2) + @hono/node-server 1, zod 4, fractional-indexing 3, @simplewebauthn/server 14.0.3 (passkeys; npm `overrides` hold its @peculiar/asn1-* at 2.10.0, @peculiar/x509 at 2.1.0 and asn1js at 3.0.10). Bundled to one file by esbuild. |
 | Web     | React 19, react-router 7 (library mode, import from `react-router`), @tanstack/react-query 5, Tailwind CSS 4, @dnd-kit/core 6 + sortable 10 + utilities 3, @floating-ui/react 0.27, lucide-react (0.5xx icon names), react-markdown 10 + remark-gfm 4, clsx, @simplewebauthn/browser 14.0.0. |
-| Tests   | vitest 4, two projects (§10): `node` (node environment) and `workers` (@cloudflare/vitest-plugin 1.3.6, in workerd). |
+| Tests   | vitest 4, two projects (§10): `node` (node environment) and `workers` (@cloudflare/vitest-plugin 1.5.0, in workerd). |
 | TS      | TypeScript 5.9, strict, `noUncheckedIndexedAccess`, `verbatimModuleSyntax` (use `import type`). |
-| Cloudflare | Dev-only, pinned to exact versions: `wrangler` 4.147.0, `@cloudflare/workers-types` 5.20261001.1, `@cloudflare/vitest-plugin` 1.3.6 (the Cloudflare runtime's typecheck and tests; docs/design/multi-user-and-cloudflare.md §10). |
+| Cloudflare | Dev-only, pinned to exact versions: `wrangler` 4.156.2, `@cloudflare/workers-types` 5.20261102.1, `@cloudflare/vitest-plugin` 1.5.0 (the Cloudflare runtime's typecheck and tests; docs/design/multi-user-and-cloudflare.md §10). |
 
 **No new npm dependencies** may be installed (parallel installs corrupt node_modules). If you truly need one,
 say so in your report. Build-time only, for the single-file app (§12.1), pinned to exact versions:
@@ -1801,7 +1801,7 @@ instance configuration, a file the repository never has (below; design Appendix 
   for operators), no backup download (`capabilities.backupDownload` false), no safety point before a replace import
   (the web client requires an archive download first), no file snapshots.
 - **`wrangler.jsonc`** (repository root): `main` the TS entry, bundled by Wrangler with `tsconfig.worker.json` (the
-  `@shared` alias), `compatibility_date` 2026-10-01 (the workerd of the pinned wrangler 4.147.0; raise both together),
+  `@shared` alias), `compatibility_date` 2026-11-02 (the workerd of the pinned wrangler 4.156.2; raise both together),
   `nodejs_compat`, `build.command` `node scripts/cf/build-web.mjs`, the `DIRECTORY` and `SPACES` bindings, the
   append-only `migrations` (`v1`, `new_sqlite_classes`), `workers_dev: true`, `preview_urls: false`, `keep_vars: true`,
   observability on, `send_metrics: false`. `build-web.mjs` first refuses (exit 1, before it builds anything) a
