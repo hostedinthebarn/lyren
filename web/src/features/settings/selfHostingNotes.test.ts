@@ -10,8 +10,13 @@ import { signOutDescription } from './AccountSettings';
 import { backupFileArg, psLiteral, psQuote, SelfHostingNotes, scheduledBackupArguments, selfHostingTitle } from './SelfHostingNotes';
 
 function textOf(html: string): string {
-  return html
-    .replace(/<[^>]+>/g, ' ')
+  // Strip tags until none remain, so nested input like `<<b>b>` can't leave a tag behind.
+  let stripped = html;
+  for (let prev = ''; prev !== stripped; ) {
+    prev = stripped;
+    stripped = stripped.replace(/<[^>]+>/g, ' ');
+  }
+  return stripped
     .replaceAll('&quot;', '"')
     .replaceAll('&#x27;', "'")
     .replaceAll('&lt;', '<')
