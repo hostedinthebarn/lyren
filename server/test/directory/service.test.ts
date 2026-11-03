@@ -115,8 +115,8 @@ describe('spaceSync', () => {
       status: 'active',
       syncVersion: expect.any(Number),
       members: [
-        { userId: user.id, displayName: 'Owner', email: 'owner@example.com' },
-        { userId: member.user.id, displayName: 'Mem', email: 'member@example.com' },
+        { userId: user.id, displayName: 'Owner', email: 'owner@example.com', role: 'owner' },
+        { userId: member.user.id, displayName: 'Mem', email: 'member@example.com', role: 'member' },
       ],
       others: [
         { userId: former.user.id, displayName: 'Former' },

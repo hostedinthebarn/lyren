@@ -117,8 +117,8 @@ describe('the space host on DoDb', () => {
         status: 'active',
         syncVersion: 2,
         members: [
-          { userId: 1, displayName: 'Owner', email: 'owner@example.com' },
-          { userId: 2, displayName: 'Bob', email: 'bob@example.com' },
+          { userId: 1, displayName: 'Owner', email: 'owner@example.com', role: 'owner' },
+          { userId: 2, displayName: 'Bob', email: 'bob@example.com', role: 'member' },
         ],
         others: [{ userId: 9, deleted: true }],
       };

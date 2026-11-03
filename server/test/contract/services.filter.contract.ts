@@ -46,6 +46,9 @@ interface World {
   at: (today: string) => TaskDTO[];
   /** Draws the slipped criterion of randomFilter. */
   slipRnd: ReturnType<typeof prng>;
+  /** Draws the assigneeIds criterion of randomFilter. */
+  assigneeRnd: ReturnType<typeof prng>;
+  assigneeIds: number[];
   statuses: StatusRow[];
   projects: Array<{ id: number; status: 'active' | 'on_hold' | 'completed' | 'archived' }>;
   projectIds: number[];
@@ -140,6 +143,21 @@ function buildWorld({ db }: SpaceDb): World {
     db.run('INSERT OR IGNORE INTO task_links (blocker_id, blocked_id, created_at) VALUES (:a, :b, :t)', { a, b, t: timestamps[0]! });
   }
 
+  // Assignees (docs/design/task-assignees.md), from a generator of their own, so everything above draws the same
+  // values as before they existed.
+  const assignRnd = prng(5150);
+  const assigneeIds = [101, 102, 103];
+  for (const id of assigneeIds) {
+    db.run(
+      `INSERT INTO users (id, kind, display_name, email, role, is_member, deleted, updated_at)
+       VALUES (:id, 'account', :name, NULL, 'member', 1, 0, :t)`,
+      { id, name: `Member ${id}`, t: timestamps[0]! },
+    );
+  }
+  for (const id of ids) {
+    if (assignRnd.chance(0.6)) db.run('UPDATE tasks SET assignee_id = :a WHERE id = :id', { id, a: assignRnd.pick(assigneeIds) });
+  }
+
   const rows = db.all<TaskRow>('SELECT * FROM tasks ORDER BY id');
   const byDay = new Map<string, TaskDTO[]>();
   const at = (today: string): TaskDTO[] => {
@@ -152,6 +170,8 @@ function buildWorld({ db }: SpaceDb): World {
     tasks: hydrateTasks(db, rows),
     at,
     slipRnd: prng(4242),
+    assigneeRnd: prng(6161),
+    assigneeIds,
     statuses,
     projects,
     projectIds,
@@ -195,6 +215,10 @@ function randomFilter(rnd: ReturnType<typeof prng>, w: World): TaskFilter {
   if (rnd.chance(0.3)) f.includeArchivedProjects = rnd.chance(0.6);
   // From a generator of its own, so the other criteria draw the same values as before links existed.
   if (w.slipRnd.chance(0.15)) f.slipped = w.slipRnd.chance(0.8);
+  if (w.assigneeRnd.chance(0.3)) {
+    const a = w.assigneeRnd;
+    f.assigneeIds = a.chance(0.15) ? [null] : [...a.subset(w.assigneeIds, 0.4), ...(a.chance(0.35) ? [null] : [])];
+  }
   return f;
 }
 
@@ -257,6 +281,8 @@ export function defineFilterContract(kind: string, withSpaceDb: WithSpaceDb): vo
           { includeArchivedProjects: true },
           { milestoneIds: [null] },
           { epicIds: [null] },
+          { assigneeIds: [null] },
+          { assigneeIds: [101, null] },
           { tagIds: [null] },
           { tagIds: [null], tagMode: 'all' },
           { tagIds: [null, w.tagIds[0]!], tagMode: 'all' },

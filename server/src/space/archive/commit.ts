@@ -397,13 +397,27 @@ export function writeImport(db: Db, plan: ImportPlan, o: { now: string; safety: 
     const ranked = [...d.tasks].sort((a, b) => compareText(a.rank, b.rank) || a.id - b.id);
     const keys = generateNKeysBetween(null, null, ranked.length);
     const rankOf = new Map(ranked.map((t, i) => [t.id, keys[i]!]));
+    // An assignee is kept only when the person it maps to here can be assigned (a member who isn't a viewer;
+    // docs/design/task-assignees.md); otherwise the task arrives unassigned.
+    const assignable = new Set(
+      db
+        .all<{ id: number }>(
+          "SELECT id FROM users WHERE kind = 'account' AND is_member = 1 AND (role IS NULL OR role <> 'viewer')",
+        )
+        .map((u) => u.id),
+    );
+    const assignee = (t: { assigneeId?: number | null }): number | null => {
+      if (targets === null || t.assigneeId === null || t.assigneeId === undefined) return null;
+      const to = userMap.get(t.assigneeId) ?? null;
+      return to !== null && assignable.has(to) ? to : null;
+    };
     insertRows(
       db,
       'tasks',
       [
         ...['id', 'project_id', 'number', 'epic_id', 'status_id', 'title', 'title_fold', 'description', 'description_fold'],
         ...['priority', 'start_date', 'due_date', 'estimate', 'rank', 'completed_at', 'archived_at', 'created_by'],
-        ...['created_at', 'updated_at', 'tag_ids', 'comment_count', 'worklog_minutes'],
+        ...['assignee_id', 'created_at', 'updated_at', 'tag_ids', 'comment_count', 'worklog_minutes'],
       ],
       d.tasks.map((t) => ({
         id: t.id,
@@ -423,6 +437,7 @@ export function writeImport(db: Db, plan: ImportPlan, o: { now: string; safety: 
         completed_at: closedAt(isClosedCategory(statusCategory.get(t.statusId)!), t.completedAt, now),
         archived_at: t.archivedAt,
         created_by: ref(t.createdBy),
+        assignee_id: assignee(t),
         created_at: t.createdAt,
         updated_at: t.updatedAt,
         tag_ids: JSON.stringify(tagsOf(t.tagIds)),

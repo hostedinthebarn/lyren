@@ -4,6 +4,7 @@
 >
 > - **Personal access tokens and an MCP endpoint**, so scripts and AI assistants can work in your spaces without your password ([design §5.12](docs/design/multi-user-and-cloudflare.md)).
 > - **Task dependencies**: finish-to-start links, adjusted dates, slip and rebaseline ([docs/design/task-dependencies.md](docs/design/task-dependencies.md)).
+> - **Task assignees** ([docs/design/task-assignees.md](docs/design/task-assignees.md)).
 > - **"Hide done"** on a project's overview.
 >
 > Everything below is the upstream README, true for this version too. Changes that suit upstream are offered back as pull requests. Every merge to `main` here is tested, packaged as a release and deployed by [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) and [`deploy/pull-deploy/`](deploy/pull-deploy/README.md).

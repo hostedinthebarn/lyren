@@ -21,7 +21,7 @@ export const ROW_WEIGHTS = {
   projects: 2,
   milestones: 2,
   epics: 3,
-  tasks: 8,
+  tasks: 9,
   task_tags: 2,
   task_links: 2,
   comments: 2,

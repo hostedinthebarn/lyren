@@ -16,7 +16,7 @@ import { defaultStatusId, nextTaskNumber, requireTagIds, requireTask } from './e
 import { toTagRef } from './mappers';
 import { rankForNewTask, rankForPosition } from './rank';
 import { truncateText } from './text';
-import type { EpicRow, ProjectRow, StatusRow, TagRow, TaskRow } from './rows';
+import type { EpicRow, MirrorUserRow, ProjectRow, StatusRow, TagRow, TaskRow } from './rows';
 import { inJson, jsonList, nowIso } from './sql';
 import { getTaskDTO, getTaskDTOs } from './tasks';
 
@@ -53,6 +53,18 @@ function epicRef(db: Db, id: number, path: string): EpicRow {
   return db.get<EpicRow>('SELECT * FROM epics WHERE id = :id', { id }) ?? invalid(path, `Epic ${id} does not exist`);
 }
 
+/**
+ * The member a task may be assigned to (docs/design/task-assignees.md): a current member of the space who can edit
+ * tasks, so never a viewer, a former member or a placeholder. A role the mirror doesn't know yet (null, before the
+ * first sync after migration 5) is allowed: the actor's own row and every sync fill it in.
+ */
+function assigneeRef(db: Db, id: number, path: string): MirrorUserRow {
+  const row = db.get<MirrorUserRow>('SELECT * FROM users WHERE id = :id', { id });
+  if (!row || row.kind !== 'account' || row.is_member !== 1) invalid(path, `User ${id} is not a member of this space`);
+  if (row.role === 'viewer') invalid(path, `${row.display_name} is a viewer, and a viewer can't be assigned a task`);
+  return row;
+}
+
 function statusCategoryClosed(db: Db, statusId: number): boolean {
   const row = db.get<Pick<StatusRow, 'category'>>('SELECT category FROM statuses WHERE id = :id', { id: statusId });
   return row ? isClosedCategory(row.category) : false;
@@ -87,11 +99,11 @@ function projectKey(db: Db, projectId: number): string {
 }
 
 const TASK_INSERT = `INSERT INTO tasks (project_id, number, epic_id, status_id, title, title_fold, description, description_fold,
-                     priority, start_date, due_date, estimate, rank, completed_at, archived_at, created_by, created_at,
-                     updated_at)
+                     priority, start_date, due_date, estimate, rank, completed_at, archived_at, created_by, assignee_id,
+                     created_at, updated_at)
   VALUES (:project_id, :number, :epic_id, :status_id, :title, :title_fold, :description, :description_fold,
-          :priority, :start_date, :due_date, :estimate, :rank, :completed_at, :archived_at, :created_by, :created_at,
-          :updated_at)`;
+          :priority, :start_date, :due_date, :estimate, :rank, :completed_at, :archived_at, :created_by, :assignee_id,
+          :created_at, :updated_at)`;
 
 /** The fold columns of a task's title and description (TASK_INSERT, the full UPDATE; design §3.4). */
 function taskFolds(values: Pick<TaskRow, 'title' | 'description'>): Pick<TaskRow, 'title_fold' | 'description_fold'> {
@@ -111,6 +123,7 @@ export function createTaskRow(db: Db, actor: MutationActor, input: TaskCreateDat
       if (epic.project_id !== project.id) invalid('epicId', 'The epic belongs to another project');
     }
     const statusId = input.statusId !== undefined ? statusRef(db, input.statusId, 'statusId').id : defaultStatusId(db);
+    const assigneeId = input.assigneeId != null ? assigneeRef(db, input.assigneeId, 'assigneeId').id : null;
     const startDate = input.startDate ?? null;
     const dueDate = input.dueDate ?? null;
     assertDateOrder(startDate, dueDate, plainPath);
@@ -134,6 +147,7 @@ export function createTaskRow(db: Db, actor: MutationActor, input: TaskCreateDat
       completed_at: statusCategoryClosed(db, statusId) ? now : null,
       archived_at: null,
       created_by: actor.userId,
+      assignee_id: assigneeId,
       created_at: now,
       updated_at: now,
     };
@@ -237,6 +251,12 @@ export function applyTaskUpdate(
       else if (wasClosed && !isClosed) completedAt = null;
     }
 
+    // ---- Assignee (checked only when it changes: a task keeps a member who left or became a viewer) ----
+    let assigneeId = before.assignee_id;
+    if (input.assigneeId !== undefined && input.assigneeId !== before.assignee_id) {
+      assigneeId = input.assigneeId === null ? null : assigneeRef(db, input.assigneeId, path('assigneeId')).id;
+    }
+
     // ---- Dates --------------------------------------------------------------------------
     const startDate = input.startDate !== undefined ? input.startDate : before.start_date;
     const dueDate = input.dueDate !== undefined ? input.dueDate : before.due_date;
@@ -266,6 +286,7 @@ export function applyTaskUpdate(
       project_id: projectId,
       epic_id: epicId,
       status_id: statusId,
+      assignee_id: assigneeId,
       title: input.title ?? before.title,
       description: input.description ?? before.description,
       priority: input.priority ?? before.priority,
@@ -294,7 +315,7 @@ export function applyTaskUpdate(
               title = :title, title_fold = :title_fold, description = :description,
               description_fold = :description_fold, priority = :priority, start_date = :start_date,
               due_date = :due_date, estimate = :estimate, rank = :rank, completed_at = :completed_at,
-              archived_at = :archived_at, updated_at = :updated_at
+              archived_at = :archived_at, assignee_id = :assignee_id, updated_at = :updated_at
         WHERE id = :id`,
       { ...after, ...taskFolds(after) },
     );

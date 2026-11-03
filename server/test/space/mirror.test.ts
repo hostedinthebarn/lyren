@@ -65,7 +65,10 @@ describe('sync', () => {
       name: 'S',
       status: 'active' as const,
       syncVersion: 2,
-      members: [{ userId: OWNER_ID, displayName: 'Owner', email: 'owner@example.com' }, { userId: 2, displayName: 'B', email: null }],
+      members: [
+        { userId: OWNER_ID, displayName: 'Owner', email: 'owner@example.com', role: 'owner' as const },
+        { userId: 2, displayName: 'B', email: null, role: 'member' as const },
+      ],
       others: [],
     };
     expect(applySync(db, payload, T)).toBe(2); // B inserted, space_name changed
@@ -155,6 +158,7 @@ describe('deleted accounts lose their email after one sync', () => {
       kind: 'account',
       isMember: false,
       deleted: true,
+      role: null,
     });
   });
 
@@ -259,8 +263,8 @@ function spaceDb(): NodeDb {
   const db = new NodeDb(':memory:');
   migrate(db, SPACE_MIGRATIONS, { appVersion: APP_VERSION });
   db.run(
-    `INSERT INTO users (id, kind, display_name, email, is_member, updated_at)
-     VALUES (:id, 'account', 'Owner', 'owner@example.com', 1, :t)`,
+    `INSERT INTO users (id, kind, display_name, email, role, is_member, updated_at)
+     VALUES (:id, 'account', 'Owner', 'owner@example.com', 'owner', 1, :t)`,
     { id: OWNER_ID, t: T },
   );
   return db;

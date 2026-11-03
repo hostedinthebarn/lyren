@@ -15,7 +15,7 @@ const boot = (estimateUnit: 'points' | 'hours' = 'points') =>
   ({
     user: { id: 1, displayName: 'Owner' },
     space: { id: A, name: 'Space', role: 'owner' },
-    people: [{ id: 1, displayName: 'Owner', kind: 'account', isMember: true, deleted: false }],
+    people: [{ id: 1, displayName: 'Owner', kind: 'account', isMember: true, deleted: false, role: 'owner' }],
     settings: { estimateUnit, defaultBoardId: null },
     version: 'test',
     statuses: [],

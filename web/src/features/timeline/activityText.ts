@@ -82,6 +82,21 @@ function arrowChange(what: string, change: FieldChange, label: Labeller): string
   return `changed ${what} from ${label(change, 'from') ?? 'none'} → ${label(change, 'to') ?? 'none'}`;
 }
 
+/** "assigned it to Ann", "unassigned Bob", "reassigned it from Bob to Ann" (names as they were at the time). */
+function assigneeChange(change: FieldChange): string {
+  const name = (s: 'from' | 'to') => {
+    const id = s === 'from' ? change.from : change.to;
+    if (id === null || id === undefined) return undefined;
+    return (s === 'from' ? change.fromLabel : change.toLabel) || 'a former member';
+  };
+  const from = name('from');
+  const to = name('to');
+  if (to !== undefined && from === undefined) return `assigned it to ${to}`;
+  if (to === undefined && from !== undefined) return `unassigned ${from}`;
+  if (to !== undefined && from !== undefined) return `reassigned it from ${from} to ${to}`;
+  return 'changed the assignee';
+}
+
 /** set / removed / changed phrasing for optional references (epic, milestone). */
 function refChange(what: string, change: FieldChange, label: Labeller): string {
   // undefined = no reference (null id); null = the referenced entity is gone (no label).
@@ -155,6 +170,8 @@ export function changePhrase(change: FieldChange, lookups: ActivityTextLookups =
       return arrowChange('the key', change, plainLabel);
     case 'epic':
       return refChange('epic', change, entityLabel(lookups.epicById));
+    case 'assignee':
+      return assigneeChange(change);
     case 'milestone':
       return refChange('milestone', change, entityLabel(lookups.milestoneById));
     case 'startDate':

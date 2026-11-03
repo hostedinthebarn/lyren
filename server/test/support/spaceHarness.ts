@@ -201,7 +201,7 @@ export class FakeDirectoryPort implements SpaceDirectoryPort {
       .sort((a, b) => a - b)
       .map((id) => {
         const account = this.accounts.get(id)!;
-        return { userId: id, displayName: account.displayName, email: account.email };
+        return { userId: id, displayName: account.displayName, email: account.email, role: this.members.get(id)! };
       });
     const others = [...new Set(input.mirrorUserIds)]
       .filter((id) => !this.members.has(id))

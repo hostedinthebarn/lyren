@@ -21,7 +21,7 @@ describe('GET /api/bootstrap', () => {
     // (the preferences moved to the account, §3.6).
     expect(b.user).toEqual({ id: user.id, displayName: user.displayName });
     expect(b.space).toEqual({ id: spaceId, name: "Owner's space", role: 'owner' });
-    expect(b.people).toEqual([{ id: user.id, displayName: 'Owner', kind: 'account', isMember: true, deleted: false }]);
+    expect(b.people).toEqual([{ id: user.id, displayName: 'Owner', kind: 'account', isMember: true, deleted: false, role: 'owner' }]);
     expect(typeof b.version).toBe('string');
     expect(b.settings).toEqual({ ...DEFAULT_SPACE_SETTINGS, defaultBoardId: b.boards[0]!.id });
     expect(b.statuses.map((s) => s.name)).toEqual(['Backlog', 'Todo', 'In Progress', 'In Review', 'Done', 'Cancelled']);

@@ -18,6 +18,7 @@ import {
 import type { TaskFilter } from '@shared/schemas';
 import { useLookups } from '../../api/bootstrap';
 import {
+  assigneeOptions,
   epicOptions,
   milestoneOptions,
   priorityOptions,
@@ -231,6 +232,10 @@ export function FilterEditor({ value, onChange, scopeProjectId, archiveControls 
   const projects = useMemo(() => projectOptions(lookups.projects, { includeArchived: true }), [lookups.projects]);
   const milestones = useMemo(() => milestoneOptions(lookups, { projectId: scope ?? undefined, includeNone: true }), [lookups, scopeKey]); // scopeKey stands in for `scope`
   const epics = useMemo(() => epicOptions(lookups, { projectId: scope ?? undefined, includeNone: true }), [lookups, scopeKey]);
+  const assignees = useMemo(
+    () => assigneeOptions(lookups.people, { viewerId: lookups.user.id, current: null, noneLabel: 'Unassigned' }),
+    [lookups.people, lookups.user.id],
+  );
   const statuses = useMemo(() => statusOptions(lookups.statuses), [lookups.statuses]);
   const categories = useMemo<PickerOption<StatusCategory>[]>(
     () =>
@@ -259,6 +264,7 @@ export function FilterEditor({ value, onChange, scopeProjectId, archiveControls 
       <div className={clsx('grid gap-3', !compact && 'sm:grid-cols-2 sm:gap-4')}>
         <MultiField<number | null> label="Milestones" noun="milestone" options={milestones} value={value.milestoneIds} onChange={(milestoneIds) => set({ milestoneIds })} />
         <MultiField<number | null> label="Epics" noun="epic" options={epics} value={value.epicIds} onChange={(epicIds) => set({ epicIds })} />
+        <MultiField<number | null> label="Assignees" noun="person" options={assignees} value={value.assigneeIds} onChange={(assigneeIds) => set({ assigneeIds })} />
         <MultiField<number> label="Statuses" noun="status" options={statuses} value={value.statusIds} onChange={(statusIds) => set({ statusIds })} />
         <MultiField<StatusCategory> label="Status categories" noun="category" options={categories} value={value.statusCategories} onChange={(statusCategories) => set({ statusCategories })} />
         <MultiField<Priority> label="Priorities" noun="priority" options={priorities} value={value.priorities} onChange={(p) => set({ priorities: p })} />

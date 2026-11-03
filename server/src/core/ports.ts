@@ -55,12 +55,17 @@ export interface MirrorProfile {
   email: string | null;
 }
 
+/** A current member as spaceSync reports them: the profile and their role in the space (task assignees). */
+export interface MirrorMember extends MirrorProfile {
+  role: SpaceIdentity['role'];
+}
+
 export interface SpaceSyncPayload {
   name: string;
   status: 'importing' | 'active';
   syncVersion: number;
   /** Current members. */
-  members: MirrorProfile[];
+  members: MirrorMember[];
   /** One entry for every id in mirrorUserIds that is not a current member (§3.5). */
   others: Array<{ userId: number; displayName: string } | { userId: number; deleted: true }>;
 }

@@ -24,6 +24,7 @@ import { taskActions } from './taskActions';
 import type { ExtraMenuItems } from './taskActionItems';
 import { DEFAULT_CARD_FIELDS, markdownExcerpt, resolveFields, taskClosedKind, taskColor, type CardFields } from './taskDisplay';
 import { TagList } from './Tags';
+import { UserAvatar } from './UserAvatar';
 import { useSharedToday } from './useSharedToday';
 
 export interface TaskCardProps extends Omit<HTMLAttributes<HTMLDivElement>, 'onClick' | 'children'> {
@@ -106,9 +107,11 @@ const TaskCardImpl = forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard
       </Pill>
     ),
   ].filter(Boolean);
+  const assignee = task.assigneeId !== null ? lookups.personById.get(task.assigneeId) : undefined;
   const counts = [
     f.commentCount && task.commentCount > 0 && <CommentCountLabel key="comments" count={task.commentCount} />,
     f.worklog && task.worklogMinutes > 0 && <DurationLabel key="worklog" minutes={task.worklogMinutes} plain />,
+    assignee && <UserAvatar key="assignee" user={assignee} size="xs" className={clsx(!assignee.isMember && 'opacity-60')} />,
   ].filter(Boolean);
 
   const open = (e: MouseEvent<HTMLDivElement>) => {
