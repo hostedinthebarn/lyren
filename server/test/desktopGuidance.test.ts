@@ -211,7 +211,7 @@ describe('reset-password: how to lift a lock-out', () => {
     });
     expect(res.status, res.stderr).toBe(0);
     expect(res.stdout).toMatch(/^New password for owner: \S+\n/);
-    expect(res.stdout.trimEnd().split('\n').at(-1)).toMatch(new RegExp(`${ending.replace(/[.]/g, '\\.')}$`));
+    expect(res.stdout.trimEnd().split('\n').at(-1)).toMatch(new RegExp(`${ending.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
   }, 90_000);
 
   it('desktop: --db-path points the commands at a DB_PATH database, not lyren.db in the data folder (R6REV-1)', async () => {
