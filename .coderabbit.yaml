@@ -20,7 +20,7 @@ reviews:
   suggested_reviewers: false
   auto_review:
     enabled: true
-    drafts: false
+    drafts: true   # the Worker opens draft PRs; review them at once so the review is done before Gary looks
     base_branches:
       - main
   path_filters:
