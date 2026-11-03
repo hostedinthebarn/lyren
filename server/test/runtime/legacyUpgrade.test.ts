@@ -322,7 +322,7 @@ describe('the upgrade of a 1.x database', () => {
       // A crash between the snapshot and the marker takes a second snapshot; nothing else does.
       await expectUpgraded(f, { snapshots: step === 'snapshot' ? 2 : 1 });
     }
-  });
+  }, 30_000); // one legacy folder and two starts per step: over 5 s on a CI runner
 
   it('a resumed upgrade keeps the space id of the first attempt and names its snapshot', async () => {
     const f = await legacyFolder();
