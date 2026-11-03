@@ -121,8 +121,8 @@ export function createDirectoryService(ctx: DirectoryContext, startupWarnings: r
   async function spaceSync(input: { spaceId: string; mirrorUserIds: number[] }): Promise<SpaceSyncPayload | null> {
     const space = findSpace(db, input.spaceId);
     if (!space || space.deleted_at !== null || space.status === 'provisioning') return null;
-    const members = db.all<{ id: number; display_name: string; email: string | null }>(
-      `SELECT u.id, u.display_name, u.email FROM memberships m JOIN users u ON u.id = m.user_id
+    const members = db.all<{ id: number; display_name: string; email: string | null; role: SpaceIdentity['role'] }>(
+      `SELECT u.id, u.display_name, u.email, m.role FROM memberships m JOIN users u ON u.id = m.user_id
        WHERE m.space_id = :spaceId ORDER BY u.id`,
       { spaceId: space.id },
     );
@@ -140,7 +140,7 @@ export function createDirectoryService(ctx: DirectoryContext, startupWarnings: r
       name: space.name,
       status: space.status,
       syncVersion: space.sync_version,
-      members: members.map((m) => ({ userId: m.id, displayName: m.display_name, email: m.email })),
+      members: members.map((m) => ({ userId: m.id, displayName: m.display_name, email: m.email, role: m.role })),
       others: asked.map((userId) => {
         const displayName = known.get(userId);
         return displayName === undefined ? { userId, deleted: true as const } : { userId, displayName };

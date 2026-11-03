@@ -106,10 +106,15 @@ export function compactChanges(changes: ReadonlyArray<FieldChange | null>): Fiel
   return changes.filter((c): c is FieldChange => c !== null);
 }
 
-function namesById(db: Db, table: 'statuses' | 'epics' | 'milestones', ids: Array<number | null>): Map<number, string> {
+function namesById(
+  db: Db,
+  table: 'statuses' | 'epics' | 'milestones' | 'users',
+  ids: Array<number | null>,
+): Map<number, string> {
   const wanted = ids.filter((id): id is number => id !== null);
   if (wanted.length === 0) return new Map();
-  const rows = db.all<{ id: number; name: string }>(`SELECT id, name FROM ${table} WHERE ${inJson('id', 'ids')}`, {
+  const name = table === 'users' ? 'display_name AS name' : 'name';
+  const rows = db.all<{ id: number; name: string }>(`SELECT id, ${name} FROM ${table} WHERE ${inJson('id', 'ids')}`, {
     ids: jsonList(wanted),
   });
   return new Map(rows.map((r) => [r.id, r.name]));
@@ -121,7 +126,7 @@ function labelled(names: Map<number, string>, id: number | null): string | null 
 
 /**
  * Field changes between two versions of a task (for `task.updated`), in SPEC order:
- * title, description, status, priority, epic, startDate, dueDate, estimate, tags, archived.
+ * title, description, status, priority, epic, assignee, startDate, dueDate, estimate, tags, archived.
  * Pass `tags` when the tag set may have changed. Status/epic names are looked up now
  * (call while both still exist, i.e. inside the mutation).
  */
@@ -133,6 +138,8 @@ export function taskChanges(
 ): FieldChange[] {
   const statuses = before.status_id !== after.status_id ? namesById(db, 'statuses', [before.status_id, after.status_id]) : null;
   const epics = before.epic_id !== after.epic_id ? namesById(db, 'epics', [before.epic_id, after.epic_id]) : null;
+  const people =
+    before.assignee_id !== after.assignee_id ? namesById(db, 'users', [before.assignee_id, after.assignee_id]) : null;
   return compactChanges([
     valueChange('title', before.title, after.title),
     flagChange('description', before.description, after.description),
@@ -149,6 +156,11 @@ export function taskChanges(
       valueChange('epic', before.epic_id, after.epic_id, {
         from: labelled(epics, before.epic_id),
         to: labelled(epics, after.epic_id),
+      }),
+    people &&
+      valueChange('assignee', before.assignee_id, after.assignee_id, {
+        from: labelled(people, before.assignee_id),
+        to: labelled(people, after.assignee_id),
       }),
     valueChange('startDate', before.start_date, after.start_date),
     valueChange('dueDate', before.due_date, after.due_date),

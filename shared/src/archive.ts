@@ -1,6 +1,6 @@
 // The space archive, format version 2 (design §8.2): the portable form of one space, the same on both
 // runtimes, and how data moves between instances. Its rows have the v1 shapes (./export.ts), with original ids,
-// except that every user reference (tasks' createdBy, comments' and work logs' authorId, activity's actorId,
+// except that every user reference (tasks' createdBy and assigneeId, comments' and work logs' authorId, activity's actorId,
 // and the provenance `importedBy` of comments, work logs and activity) is null or the id of one of `users`:
 // positive for accounts, negative for placeholders ("former members" known by name only). The archive is
 // written gzip-compressed (archiveFileName); an import also takes it, and v1 exports, uncompressed (isGzip).
@@ -54,8 +54,14 @@ const rows = exportRowSchemasFor(archiveUserRefSchema);
 /** One row of each table of an archive (checked one at a time, as a v1 export's are). */
 export const archiveRowSchemas = {
   ...rows,
-  /** `blockedBy`: the task's blockers (task dependencies), absent in archives written before them. */
-  tasks: rows.tasks.extend({ blockedBy: z.array(exportIdSchema).max(10_000).optional() }),
+  /**
+   * `blockedBy`: the task's blockers (task dependencies); `assigneeId`: its assignee, one of `users`
+   * (docs/design/task-assignees.md). Each is absent in archives written before it, and when it has no value.
+   */
+  tasks: rows.tasks.extend({
+    blockedBy: z.array(exportIdSchema).max(10_000).optional(),
+    assigneeId: archiveUserRefSchema.nullable().optional(),
+  }),
   comments: rows.comments.extend(provenance),
   worklogs: rows.worklogs.extend(provenance),
   activity: rows.activity.extend(provenance),

@@ -76,6 +76,7 @@ export function movedText(counts: Partial<PeopleReassignedDTO['counts']>): strin
   const parts = (
     [
       [counts.tasks ?? 0, 'task', 'tasks'],
+      [counts.assigned ?? 0, 'assigned task', 'assigned tasks'],
       [counts.comments ?? 0, 'comment', 'comments'],
       [counts.worklogs ?? 0, 'work log', 'work logs'],
       [counts.activity ?? 0, 'activity entry', 'activity entries'],

@@ -287,6 +287,8 @@ export interface TaskDTO {
   completedAt: string | null;
   archivedAt: string | null;
   createdBy: number | null;
+  /** The member who owns the task (docs/design/task-assignees.md); null when unassigned. */
+  assigneeId: number | null;
   createdAt: string;
   updatedAt: string;
   /** Sorted by tag name (case-insensitive). */
@@ -475,6 +477,11 @@ export interface PersonDTO {
   isMember: boolean;
   /** The account no longer exists (shown with "(deleted account)"). */
   deleted: boolean;
+  /**
+   * A member's role in the space, null for everyone else (and for a member the space hasn't synced since migration
+   * 5). The assignee picker offers the members who aren't viewers (docs/design/task-assignees.md).
+   */
+  role: 'owner' | 'admin' | 'member' | 'viewer' | null;
 }
 
 /** GET /api/s/:spaceId/bootstrap: what every page of a space needs at start. */
@@ -640,7 +647,11 @@ export interface ExportDTO {
   projects: Array<Omit<ProjectDTO, 'stats'> & { taskCounter: number }>;
   milestones: Array<Omit<MilestoneDTO, 'stats'>>;
   epics: Array<Omit<EpicDTO, 'stats'>>;
-  tasks: Array<Omit<TaskDTO, 'ref' | 'milestoneId' | 'tags' | 'commentCount' | 'worklogMinutes' | TaskLinkFields> & { tagIds: number[] }>;
+  tasks: Array<
+    Omit<TaskDTO, 'ref' | 'milestoneId' | 'tags' | 'commentCount' | 'worklogMinutes' | 'assigneeId' | TaskLinkFields> & {
+      tagIds: number[];
+    }
+  >;
   comments: Array<Omit<CommentDTO, 'author' | Provenance> & { authorId: number | null }>;
   worklogs: Array<Omit<WorklogDTO, 'author' | Provenance> & { authorId: number | null }>;
   activity: Array<Omit<ActivityDTO, 'actor' | 'task' | Provenance> & { actorId: number | null }>;
@@ -684,7 +695,7 @@ export interface SpaceArchiveDTO {
   milestones: ExportDTO['milestones'];
   epics: ExportDTO['epics'];
   /** `blockedBy`: the task's blockers (task dependencies); absent in archives written before them. */
-  tasks: Array<ExportDTO['tasks'][number] & { blockedBy?: number[] }>;
+  tasks: Array<ExportDTO['tasks'][number] & { blockedBy?: number[]; assigneeId?: number | null }>;
   comments: Array<ExportDTO['comments'][number] & ArchiveProvenance>;
   worklogs: Array<ExportDTO['worklogs'][number] & ArchiveProvenance>;
   activity: Array<ExportDTO['activity'][number] & ArchiveProvenance>;
@@ -765,7 +776,8 @@ export interface ImportResultDTO {
 /** POST /api/s/:spaceId/people/:personId/reassign: the rows moved to the member. */
 export interface PeopleReassignedDTO {
   ok: true;
-  counts: { tasks: number; comments: number; worklogs: number; activity: number };
+  /** tasks: the tasks they created; assigned: the tasks assigned to them that moved (none to a viewer). */
+  counts: { tasks: number; assigned: number; comments: number; worklogs: number; activity: number };
 }
 
 /** POST /api/s/:spaceId/people/me/disown: the imported rows moved to an "Unknown (imported)" placeholder. */

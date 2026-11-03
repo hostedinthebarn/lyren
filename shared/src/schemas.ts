@@ -290,6 +290,8 @@ export const taskCreateInput = z.object({
   projectId: idSchema,
   epicId: idSchema.nullable().optional(),
   statusId: idSchema.optional(),
+  /** A member who can edit tasks (not a viewer); docs/design/task-assignees.md. */
+  assigneeId: idSchema.nullable().optional(),
   title: z.string().trim().min(1, 'Required').max(LIMITS.titleMax),
   description: descriptionSchema.optional(),
   priority: prioritySchema.optional(),
@@ -305,6 +307,7 @@ export const taskUpdateInput = z.object({
   projectId: idSchema.optional(),
   epicId: idSchema.nullable().optional(),
   statusId: idSchema.optional(),
+  assigneeId: idSchema.nullable().optional(),
   title: z.string().trim().min(1, 'Required').max(LIMITS.titleMax).optional(),
   description: descriptionSchema.optional(),
   priority: prioritySchema.optional(),
@@ -324,6 +327,7 @@ export const taskBulkPatchSchema = z.object({
   statusId: idSchema.optional(),
   priority: prioritySchema.optional(),
   epicId: idSchema.nullable().optional(),
+  assigneeId: idSchema.nullable().optional(),
   dueDate: isoDateSchema.nullable().optional(),
   addTagIds: tagIdsSchema.optional(),
   removeTagIds: tagIdsSchema.optional(),
@@ -345,7 +349,7 @@ export type TaskBulkDeleteInput = z.input<typeof taskBulkDeleteInput>;
 /**
  * All present criteria are ANDed. Within an array criterion values are ORed.
  * An omitted or EMPTY array means "no constraint". `null` inside milestoneIds /
- * epicIds / tagIds means "has none". See SPEC.md §Filter semantics and
+ * epicIds / assigneeIds / tagIds means "has none". See SPEC.md §Filter semantics and
  * matchesTaskFilter() in ./filter.ts (the reference implementation).
  */
 export const taskFilterSchema = z.object({
@@ -354,6 +358,8 @@ export const taskFilterSchema = z.object({
   projectIds: z.array(idSchema).max(1000).optional(),
   milestoneIds: z.array(idSchema.nullable()).max(1000).optional(),
   epicIds: z.array(idSchema.nullable()).max(1000).optional(),
+  /** Assignees' user ids; null means "unassigned". */
+  assigneeIds: z.array(idSchema.nullable()).max(1000).optional(),
   statusIds: z.array(idSchema).max(200).optional(),
   statusCategories: z.array(statusCategorySchema).optional(),
   priorities: z.array(prioritySchema).optional(),

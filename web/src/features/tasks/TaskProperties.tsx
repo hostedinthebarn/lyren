@@ -6,6 +6,7 @@ import type { TaskUpdateInput } from '@shared/schemas';
 import type { TaskDTO } from '@shared/types';
 import { useLookups } from '../../api/bootstrap';
 import {
+  AssigneePicker,
   DatePicker,
   EpicPicker,
   EstimatePicker,
@@ -45,6 +46,9 @@ export function TaskProperties({ task, save, readOnly = false }: TaskPropertiesP
     <>
       <Row label="Status">
         <StatusPicker value={task.statusId} onChange={(statusId) => run({ statusId })} triggerProps={fullWidth} />
+      </Row>
+      <Row label="Assignee">
+        <AssigneePicker value={task.assigneeId} onChange={(assigneeId) => run({ assigneeId })} triggerProps={fullWidth} />
       </Row>
       <Row label="Priority">
         <PriorityPicker value={task.priority} onChange={(priority) => run({ priority })} triggerProps={fullWidth} />

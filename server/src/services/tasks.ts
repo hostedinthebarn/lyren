@@ -147,6 +147,7 @@ export function hydrateTasks(db: Db, rows: readonly TaskRow[], schedule?: Schedu
       completedAt: r.completed_at,
       archivedAt: r.archived_at,
       createdBy: r.created_by,
+      assigneeId: r.assignee_id,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
       tags,
@@ -291,6 +292,7 @@ export function buildTaskWhere(filter: TaskFilter, ctx: TaskWhereContext): SqlFr
 
   if (nonEmpty(filter.milestoneIds)) clauses.push(inMilestones(filter.milestoneIds));
   if (nonEmpty(filter.epicIds)) clauses.push(nullableIn('t.epic_id', filter.epicIds));
+  if (nonEmpty(filter.assigneeIds)) clauses.push(nullableIn('t.assignee_id', filter.assigneeIds));
   if (nonEmpty(filter.statusIds)) clauses.push(inList(status, filter.statusIds));
   if (nonEmpty(filter.statusCategories)) {
     clauses.push(`${status} IN (SELECT id FROM statuses WHERE ${inList('category', filter.statusCategories)})`);

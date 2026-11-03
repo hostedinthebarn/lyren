@@ -5,7 +5,7 @@ import { canDisown, creatorText, importedText, movedText, personLabel, personTex
 
 const person = (id: number, displayName: string, o: Partial<PersonDTO> = {}): [number, PersonDTO] => [
   id,
-  { id, displayName, kind: 'account', isMember: true, deleted: false, ...o },
+  { id, displayName, kind: 'account', isMember: true, deleted: false, role: 'member', ...o },
 ];
 const people = new Map([
   person(1, 'Dana'),

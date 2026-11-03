@@ -49,6 +49,8 @@ const CRITERIA: Array<{ keys: Criterion[]; field: string; sets: (p: DropPatch) =
   { keys: ['priorities'], field: 'priority', sets: (p) => p.priority !== undefined },
   { keys: ['projectIds'], field: 'project', sets: (p) => p.projectId !== undefined },
   { keys: ['epicIds', 'milestoneIds'], field: 'epic', sets: (p) => p.epicId !== undefined },
+  // A drop doesn't assign anyone (yet): a column filtered by assignee keeps each task's own.
+  { keys: ['assigneeIds'], field: 'assignee', sets: () => false },
   { keys: ['tagIds', 'excludeTagIds'], field: 'tags', sets: (p) => (p.addTagIds?.length ?? 0) > 0 || (p.removeTagIds?.length ?? 0) > 0 },
   { keys: ['due', 'dueFrom', 'dueTo'], field: 'due date', sets: (p) => p.due !== undefined || p.dueDate !== undefined },
   { keys: ['archived'], field: 'archived state', sets: (p) => p.archived !== undefined },
@@ -92,6 +94,7 @@ export function dropPatchWarnings(
     completedAt: null,
     archivedAt: patch.archived ? '1970-01-01T00:00:00.000Z' : null,
     createdBy: null,
+    assigneeId: null,
     createdAt: '',
     updatedAt: '',
     tags: (patch.addTagIds ?? []).map((id) => ({ id, name: ctx.lookups.tagById.get(id)?.name ?? '', color: '#000000' })),

@@ -57,6 +57,7 @@ export function matchesTaskFilter(task: TaskDTO, filter: TaskFilter, ctx: Filter
 
   if (nonEmpty(filter.milestoneIds) && !matchesNullableIds(task.milestoneId, filter.milestoneIds)) return false;
   if (nonEmpty(filter.epicIds) && !matchesNullableIds(task.epicId, filter.epicIds)) return false;
+  if (nonEmpty(filter.assigneeIds) && !matchesNullableIds(task.assigneeId, filter.assigneeIds)) return false;
   if (nonEmpty(filter.statusIds) && !filter.statusIds.includes(task.statusId)) return false;
 
   const category = ctx.statusCategoryById.get(task.statusId);

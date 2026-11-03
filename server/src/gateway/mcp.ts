@@ -76,6 +76,9 @@ const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 /** "0 No priority, 1 Low, …": priorities are numbers in the API. */
 const PRIORITIES = PRIORITY_VALUES.map((p) => `${p} ${PRIORITY_META[p].label}`).join(', ');
+/** How an assistant finds whom it can assign (docs/design/task-assignees.md). */
+const ASSIGNEE =
+  "assigneeId is a user id from get_space_overview's people: a member who isn't a viewer.";
 
 const INSTRUCTIONS =
   'Lyren Plan is a project manager: spaces hold projects, which hold milestones, epics and tasks. Start with ' +
@@ -165,7 +168,8 @@ const TOOLS: Tool[] = [
   {
     name: 'query_tasks',
     description:
-      'Tasks matching a filter (projects, statuses, status categories, priorities, tags, due dates, text), sorted and paged. ' +
+      'Tasks matching a filter (projects, statuses, status categories, priorities, assignees, tags, due dates, text), sorted and paged. ' +
+      'filter.assigneeIds takes user ids, and null for unassigned tasks. ' +
       'Closed tasks are included unless filter.statusCategories or filter.closedWithinDays says otherwise.',
     body: taskQueryInput,
     run: call('POST', () => '/api/tasks/query', (a) => rest(a)),
@@ -193,13 +197,13 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'create_task',
-    description: `Create a task in a project. Without statusId it gets the space's default status. Priority: ${PRIORITIES}.`,
+    description: `Create a task in a project. Without statusId it gets the space's default status. Priority: ${PRIORITIES}. ${ASSIGNEE}`,
     body: taskCreateInput,
     run: call('POST', () => '/api/tasks', (a) => rest(a)),
   },
   {
     name: 'update_task',
-    description: `Change a task: give only the fields to change. Use statusId to move it, archived to archive it. Priority: ${PRIORITIES}.`,
+    description: `Change a task: give only the fields to change. Use statusId to move it, archived to archive it, assigneeId to assign it (null unassigns). Priority: ${PRIORITIES}. ${ASSIGNEE}`,
     params: { id: idParam('The task id') },
     body: taskUpdateInput,
     run: call('PATCH', (a) => `/api/tasks/${intOf(a, 'id')}`, (a) => rest(a, 'id')),
@@ -225,7 +229,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'bulk_update_tasks',
-    description: `Change several tasks at once: status, priority, epic, due date, tags added or removed, archived. Priority: ${PRIORITIES}.`,
+    description: `Change several tasks at once: status, priority, epic, assignee, due date, tags added or removed, archived. Priority: ${PRIORITIES}. ${ASSIGNEE}`,
     body: taskBulkUpdateInput,
     run: call('POST', () => '/api/tasks/bulk', (a) => rest(a)),
   },

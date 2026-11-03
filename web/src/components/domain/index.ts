@@ -58,6 +58,7 @@ export { StatusPicker, type StatusPickerProps } from './StatusPicker';
 export { PriorityPicker, type PriorityPickerProps } from './PriorityPicker';
 export { ProjectPicker, type ProjectPickerProps } from './ProjectPicker';
 export { MilestonePicker, type MilestonePickerProps } from './MilestonePicker';
+export { AssigneePicker, assigneeOptions, isAssignable, type AssigneePickerProps } from './AssigneePicker';
 export { EpicPicker, type EpicPickerProps } from './EpicPicker';
 export { TagPicker, TagPickerList, useCreateTagFromPicker, type TagPickerListProps, type TagPickerProps } from './TagPicker';
 export { DateField, DatePicker, type DateFieldProps, type DatePickerProps } from './DateField';

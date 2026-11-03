@@ -4,7 +4,9 @@
 // (an indirect change, SPEC §5.8).
 //
 // Reassign: `personId` is a placeholder or an account row of the mirror that is no member (is_member = 0);
-// `toUserId` a member's. Its tasks (created_by), comments, work logs and activity move; the moved comments, work
+// `toUserId` a member's. Its tasks (created_by), the tasks assigned to it (assignee_id, unless the member is a
+// viewer, who can't be assigned: those stay with the former member; docs/design/task-assignees.md), comments,
+// work logs and activity move; the moved comments, work
 // logs and activity get imported_by = the acting admin and imported_at = now, also those an import had labelled
 // already: the reassignment is the attribution now, so their label says who made it (Appendix D 62); a
 // placeholder's row is deleted afterwards.
@@ -61,6 +63,10 @@ export function reassignPerson(db: Db, o: { fromId: number; toId: number; byId: 
       db.run(`UPDATE ${table} SET user_id = :to, imported_by = :by, imported_at = :now WHERE user_id = :from`, params).changes;
     const counts = {
       tasks: db.run('UPDATE tasks SET created_by = :to WHERE created_by = :from', params).changes,
+      assigned:
+        target.role === 'viewer'
+          ? 0
+          : db.run('UPDATE tasks SET assignee_id = :to WHERE assignee_id = :from', params).changes,
       comments: moved('comments'),
       worklogs: moved('work_logs'),
       activity: moved('activity'),

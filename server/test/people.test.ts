@@ -29,7 +29,7 @@ describe('POST /api/people/:personId/reassign', () => {
   it("moves a former member's rows to a member, labelled as the admin's attribution", async () => {
     const { ctx, owner, bob, carol } = await space();
     const rows = (table: string, column = 'user_id') => ctx.db.all<{ n: number }>(`SELECT COUNT(*) AS n FROM ${table} WHERE ${column} = :id`, { id: carol.user.id })[0]!.n;
-    const before = { tasks: rows('tasks', 'created_by'), comments: rows('comments'), worklogs: rows('work_logs'), activity: rows('activity') };
+    const before = { tasks: rows('tasks', 'created_by'), assigned: rows('tasks', 'assignee_id'), comments: rows('comments'), worklogs: rows('work_logs'), activity: rows('activity') };
     expect(before).toMatchObject({ tasks: 1, comments: 1, worklogs: 1 });
     const res = await owner.client.post<PeopleReassignedDTO>(`/api/people/${carol.user.id}/reassign`, { toUserId: bob.user.id });
     expect(res.status).toBe(200);

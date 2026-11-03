@@ -11,7 +11,7 @@ import { formatOf } from './validate';
 type References = ArchiveUserDTO['references'];
 
 /**
- * The archive users that rows reference (createdBy, authorId, actorId and importedBy), with the rows of each
+ * The archive users that rows reference (createdBy, assigneeId, authorId, actorId and importedBy), with the rows of each
  * kind that do (a row that names a user twice counts once), in the order of `users`. Empty for v1.
  */
 export function referencedUsers(archive: ImportArchive): Map<number, { user: ImportUser; references: References }> {
@@ -25,7 +25,7 @@ export function referencedUsers(archive: ImportArchive): Map<number, { user: Imp
     }
   };
   if (archive.version === 2) {
-    for (const t of archive.tasks) count('tasks', t.createdBy);
+    for (const t of archive.tasks) count('tasks', t.createdBy, t.assigneeId);
     for (const cm of archive.comments) count('comments', cm.authorId, cm.importedBy);
     for (const w of archive.worklogs) count('worklogs', w.authorId, w.importedBy);
     for (const a of archive.activity) count('activity', a.actorId, a.importedBy);
