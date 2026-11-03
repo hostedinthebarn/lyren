@@ -1,5 +1,13 @@
 # Lyren Plan
 
+> **This is Hosted in the Barn's version of Lyren Plan.** It's based on [Lyren Plan by Darren Eberly](https://github.com/Cleptomania/lyren-plan) (MIT) and follows it, with these additions:
+>
+> - **Personal access tokens and an MCP endpoint**, so scripts and AI assistants can work in your spaces without your password ([design §5.12](docs/design/multi-user-and-cloudflare.md)).
+> - **Task dependencies**: finish-to-start links, adjusted dates, slip and rebaseline ([docs/design/task-dependencies.md](docs/design/task-dependencies.md)).
+> - **"Hide done"** on a project's overview.
+>
+> Everything below is the upstream README, true for this version too. Changes that suit upstream are offered back as pull requests. Every merge to `main` here is tested, packaged as a release and deployed by [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) and [`deploy/pull-deploy/`](deploy/pull-deploy/README.md).
+
 Lyren Plan is a self-hosted project manager for you and the people you work with. You track projects, which hold milestones, epics and tasks. Saved boards show your tasks the way you want. Every task has comments, a work log and a full change history. The projects live in **spaces**: every account has one of its own, and you can make more and share each with others by invitation, as an owner, admin, member or viewer. One Node.js process serves the web app and its JSON API, and all data lives in SQLite files: one for the accounts, one per space. It needs no external database and no third-party services (mail is optional), and the browser never loads anything from another origin. It works in desktop and mobile browsers and can be installed as a PWA. On Windows it also comes as a single program that needs nothing else installed: see [Windows app](#windows-app). It can also run on Cloudflare, on the free plan to start with when the runbook's CPU checks pass: see [Cloudflare](#cloudflare).
 
 - [Features](#features)

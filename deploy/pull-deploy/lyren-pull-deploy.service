@@ -1,0 +1,9 @@
+[Unit]
+Description=Lyren Plan pull deploy (install a new CI build from GitHub releases)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/lyren-pull-deploy
+TimeoutStartSec=15min

@@ -1,0 +1,196 @@
+# Test every pull request; on main, also package, publish and deploy (deploy/pull-deploy/README.md).
+#
+#   Pull request   typecheck, test and build (npm run check), and the server's tests on Node.js 22,
+#                  what the server runs.
+#   Push to main   the same, then package the Node.js archive, smoke-test it on Node.js 22, publish it
+#                  as the release build-<run number> (the server's pull deploy installs it within
+#                  minutes), and check from outside that it's live (when the variable LIVE_URL is set).
+#
+# Security, as in release.yml: the token can only read except in the publishing job; only GitHub's own
+# actions, pinned to release commits; no caches; nothing someone else chooses reaches a script through
+# ${{ }}. The server is never contacted from here except over its public URL.
+
+name: Deploy
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.event_name == 'pull_request' && github.ref || 'main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Typecheck, test and build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    outputs:
+      entry: ${{ steps.pack.outputs.entry }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js (the exact version in .nvmrc)
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Typecheck, test and build
+        run: npm run check
+
+      # The archive the server installs, with every entry stamped with the commit's time. `entry` is the
+      # web app's main script: the outside check waits until the live site serves it.
+      - name: Package for the server
+        id: pack
+        if: github.event_name == 'push'
+        run: |
+          SOURCE_DATE_EPOCH=$(git log -1 --format=%ct) node scripts/pack-node.mjs --no-build
+          entry=$(grep -o 'assets/index-[A-Za-z0-9_-]*\.js' dist/web/index.html | head -n 1)
+          [[ -n $entry ]] || { echo "::error::No assets/index-*.js in dist/web/index.html"; exit 1; }
+          echo "entry=$entry" >> "$GITHUB_OUTPUT"
+
+      - name: Keep the archive
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: node-archive
+          path: |
+            dist/lyren-plan-*-node.tar.gz
+            dist/lyren-plan-*-node.tar.gz.sha256
+          retention-days: 7
+          if-no-files-found: error
+
+  node22:
+    name: Server tests on Node.js 22
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Test (the node project)
+        run: npx vitest run --project node
+
+  smoke:
+    name: Smoke test the archive on Node.js 22
+    if: github.event_name == 'push'
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out (for the smoke test script)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Download the archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: node-archive
+          path: dist
+
+      # No GH_TOKEN, so the upgrade-from-1.x check (which compares with the previous release) is skipped.
+      - name: Smoke test
+        run: ./scripts/ci/smoke-node.sh dist/lyren-plan-*-node.tar.gz "$RUNNER_TEMP/smoke" 43901
+
+  publish:
+    name: Publish the build
+    if: github.event_name == 'push'
+    needs: [check, node22, smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Download the archive
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: node-archive
+          path: dist
+
+      # The release the server's pull deploy looks for: tag build-<run number>, by github-actions[bot].
+      - name: Publish build-${{ github.run_number }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: build-${{ github.run_number }}
+          SHA: ${{ github.sha }}
+        run: |
+          gh release create "$TAG" dist/lyren-plan-*-node.tar.gz dist/lyren-plan-*-node.tar.gz.sha256 \
+            --target "$SHA" --title "Build ${TAG#build-}" --latest \
+            --notes "Main at $SHA, tested and smoke-tested. Installed by the pull deploy (deploy/pull-deploy/README.md)."
+
+  verify:
+    name: Check the live site from outside
+    if: github.event_name == 'push' && vars.LIVE_URL != ''
+    needs: [check, publish]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      # The server checks for a new build every 5 minutes and then upgrades, so allow 20.
+      - name: Wait until the live site serves this build
+        env:
+          LIVE_URL: ${{ vars.LIVE_URL }}
+          ENTRY: ${{ needs.check.outputs.entry }}
+        run: |
+          for i in $(seq 1 80); do
+            if curl -fsS --max-time 15 "$LIVE_URL/?v=$RANDOM" | grep -q "$ENTRY"; then
+              echo "Live: $LIVE_URL serves $ENTRY (after about $(( (i - 1) * 15 ))s)"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::$LIVE_URL still doesn't serve $ENTRY after 20 minutes. On the server: journalctl -u lyren-pull-deploy"
+          exit 1
+
+      # Rule: real pages 200; the server's own files 404/403, or (it's a single-page app, so unknown paths
+      # get the app shell) a body identical to /. A made-up path is probed first to show which it is.
+      - name: Check what is and isn't served
+        env:
+          LIVE_URL: ${{ vars.LIVE_URL }}
+        run: |
+          set -u
+          get() { curl -s --max-time 15 -o "$2" -w '%{http_code}' "$LIVE_URL$1"; }
+          [[ $(get / shell) == 200 ]] || { echo "::error::/ is not 200"; exit 1; }
+          [[ $(get /api/health health) == 200 ]] && grep -q '"ok":true' health || { echo "::error::/api/health is not ok"; exit 1; }
+          code=$(get /made-up-path-$RANDOM made-up)
+          echo "A made-up path answers $code$(cmp -s made-up shell && echo ', the app shell')"
+          bad=0
+          for path in /server.mjs /package.json /lyren.db /data/lyren.db /.env /web/index.html /dist/server.mjs; do
+            code=$(get "$path" body)
+            if [[ $code == 404 || $code == 403 ]] || { [[ $code == 200 ]] && cmp -s body shell; }; then
+              echo "ok   $path ($code)"
+            else
+              echo "::error::$path answers $code with its own content"
+              bad=1
+            fi
+          done
+          exit $bad

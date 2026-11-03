@@ -1,0 +1,64 @@
+# CodeRabbit review config. Quiet on purpose: findings only.
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: en-US
+early_access: false
+tone_instructions: "Terse and specific. Only flag real problems; no praise, no filler."
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: false
+  poem: false
+  review_status: false
+  collapse_walkthrough: true
+  sequence_diagrams: false
+  estimate_code_review_effort: false
+  assess_linked_issues: false
+  related_issues: false
+  related_prs: false
+  suggested_labels: false
+  suggested_reviewers: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+  path_filters:
+    - "!package-lock.json"
+    - "!dist/**"
+  path_instructions:
+    - path: "**/*"
+      instructions: |
+        SPEC.md is the contract (written for agents): flag behaviour that
+        contradicts it, or a change to it without the matching SPEC or
+        docs/design update. SPEC §2: no new npm dependencies without a reason.
+    - path: "server/src/space/schema.ts"
+      instructions: |
+        Migrations are append-only: never edit one that has shipped. A new one
+        says what it adds and its compatibleFrom. Fold columns are NOT NULL
+        without a default, and every write of a folded column writes its fold.
+    - path: "server/src/**/*.ts"
+      instructions: |
+        Every task write runs in one db.tx and records its activity in that
+        transaction. Node (NodeDb) and Cloudflare (DoDb) share this code: flag
+        anything runtime-specific outside runtime/. Personal access tokens must
+        never reach directory, admin or re-auth routes. Input is validated with
+        the shared zod schemas.
+    - path: "server/src/gateway/mcp.ts"
+      instructions: |
+        Each MCP tool is a space API request through the same gate, and its
+        input is the API's zod schema; unknown arguments must be refused.
+    - path: "web/src/**/*.tsx"
+      instructions: |
+        No dangerouslySetInnerHTML, no raw HTML in Markdown, nothing loaded
+        from another origin (the CSP is script-src 'self').
+    - path: ".github/workflows/**"
+      instructions: |
+        Actions pinned to a commit SHA with the version in a comment; the token
+        read-only except where a job needs more; nothing a contributor chooses
+        (branch names, titles) inside ${{ }} in a run script.
+    - path: "deploy/pull-deploy/**"
+      instructions: |
+        This runs as root on a live server. Flag anything that installs a
+        release without checking its tag, author and .sha256, or that can leave
+        `current` pointing at a build that failed its health check.
