@@ -2280,7 +2280,7 @@ const view = (need: SpaceRole = 'viewer'): GateRule => ({ need, write: false, co
 const edit = (need: SpaceRole = 'member'): GateRule => ({ need, write: true });
 ```
 
-**Finding the rule.** `matchedRoutes(c)` (from `hono/route`, available in the pinned Hono 4.13.9) lists the
+**Finding the rule.** `matchedRoutes(c)` (from `hono/route`, available in the pinned Hono 4.13.16) lists the
 routes matched for this request. The last entry whose `method` is not `ALL` (that is, not a `use` middleware)
 is the handler that will run, and `` `${route.method} ${route.path}` `` (for example `DELETE
 /api/projects/:id`) is the key. For a `HEAD` request Hono runs the `GET` handler, so the `GET` rule applies.
@@ -4805,7 +4805,7 @@ and COMPAT-F<n>.
 
 | Id | Severity | Decision | Reason and where |
 |---|---|---|---|
-| SEC-01 | blocker | Accepted | Verified: Hono 4.13.9 routes on the `decodeURI`d path (`hono/dist/utils/url.js#getPath`) and exports `matchedRoutes` (`hono/route`). The gate is now the space app's first middleware, keyed by the matched route, failing closed; both gateways refuse non-canonical paths; `HEAD` gets the `GET` rule; the import mode is parsed once; the gate test replays encoded and `HEAD` variants. `HEAD` on the export answers headers only instead of being refused, which is equally safe once the rule applies. §6.4, §6.4.1, §13.3, §14.3 |
+| SEC-01 | blocker | Accepted | Verified: Hono 4.13.16 routes on the `decodeURI`d path (`hono/dist/utils/url.js#getPath`) and exports `matchedRoutes` (`hono/route`). The gate is now the space app's first middleware, keyed by the matched route, failing closed; both gateways refuse non-canonical paths; `HEAD` gets the `GET` rule; the import mode is parsed once; the gate test replays encoded and `HEAD` variants. `HEAD` on the export answers headers only instead of being refused, which is equally safe once the rule applies. §6.4, §6.4.1, §13.3, §14.3 |
 | SEC-02 | high | Partially | A JSON value count before `JSON.parse`, CF unpacked limit 4 MiB, one import parse at a time per Node process, `im:<userId>` 10 an hour, the `{}` bomb in the hostile tests. Not adopted: the packed/unpacked ratio cap, because the byte and value caps already bound memory and CPU and a ratio cap could refuse legitimate, very repetitive archives. §8.4, §8.9, §14.5 |
 | SEC-03 | high | Accepted | Verified `auth/routes.ts:45-46` and `cli.ts:300`. The last active admin (so the last account) can never be deleted; "no code required" is a test-only flag; the setup code is generated lazily whenever setup is required; a test covers it. §5.8.1, §5.8.17 |
 | SEC-04 | high | Partially | (a) Rejected the MAC on space ids and session tokens: a junk cookie costs at most two DO requests, the same order as any anonymous `auth/status`, and a flood exhausts the Worker quota whatever it targets; the false claim in §11.4 is corrected and malformed cookies are refused at the Worker. (b) Accepted as signed, stateless login ceremonies (a narrow refinement of D9, decision 54), buffered throttle storage and at most one `login_failed` per account per hour. (c) Accepted: coarse /48 and /24 keys, an instance-wide failure ceiling that device cookies and passkeys bypass, and no instance-wide challenge cap. (d) Accepted: a hash queue of 4. (e) Accepted per space and per instance (space write budget, daily import budget, `sc:` limit, soft-deleted spaces in the quota); a per-user budget across spaces is not adopted, because it needs a cross-object meter; the residual is documented. §5.5, §5.6, §5.9, §6.4.2, §8.9, §11.4 |
@@ -4870,7 +4870,7 @@ Clarifications added after the lead's end-to-end review. Where they touch a sect
    replace import of that space, with the per-space pre-import snapshot, rule `{ need: 'owner', write: true,
    fresh: true, reauth: 'always', allowWhenFull: true }`). `gate.test.ts` lists both. P7 removes
    `POST …/data/import` and changes the export to archive v2.
-2. **Hono is pinned exactly** (`"hono": "4.13.9"` in `package.json`, P2), because the gate depends on
+2. **Hono is pinned exactly** (`"hono": "4.13.16"` in `package.json`, P2), because the gate depends on
    `matchedRoutes` (§6.4). Upgrading Hono is a deliberate change that must keep `gate.test.ts` green.
 3. **Phase order.** P5, P6 and P7 run one after another (P5 → P6 → P7), not in parallel, since they share
    `shared/src/{schemas,types}.ts` and directory code.

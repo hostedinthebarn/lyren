@@ -33,6 +33,8 @@ export default defineConfig({
           name: 'node',
           environment: 'node',
           pool: 'forks',
+          // The directory tests hash with scrypt, which overruns the 5s default on a loaded or slow CI runner.
+          testTimeout: 30_000,
           include: ['shared/**/*.test.ts', 'server/test/**/*.test.ts', 'web/src/**/*.test.ts', 'scripts/test/**/*.test.mjs'],
         },
       },
