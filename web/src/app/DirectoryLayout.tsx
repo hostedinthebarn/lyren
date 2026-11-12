@@ -7,6 +7,7 @@ import { Suspense } from 'react';
 import { Link, Outlet, useLocation } from 'react-router';
 import { useAuthStatus } from '../api/auth';
 import { AppMark } from '../components/layout/AppMark';
+import { CreditLine } from '../components/layout/CreditLine';
 import { PageSpinner } from '../components/layout/FullPage';
 import { ConfirmHost } from '../components/ui/ConfirmDialog';
 import { homeSpace } from './legacyRedirect';
@@ -45,6 +46,7 @@ export function DirectoryLayout() {
           <Outlet />
         </Suspense>
       </main>
+      <CreditLine className="px-4 pb-safe pt-3 text-center text-xs text-fg-subtle" />
       <ConfirmHost resetKey={location.pathname + location.search} />
     </div>
   );

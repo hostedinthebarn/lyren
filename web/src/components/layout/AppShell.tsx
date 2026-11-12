@@ -15,6 +15,7 @@ import { TaskActionsHost } from '../domain/TaskActionsHost';
 import { ConfirmHost } from '../ui/ConfirmDialog';
 import { MobileNav } from './MobileNav';
 import { OfflineBanner } from './OfflineBanner';
+import { CreditLine } from './CreditLine';
 import { ShellLayoutContext } from './Page';
 import { SIDEBAR_WIDTH, Sidebar } from './Sidebar';
 import { TrayHint } from './TrayHint';
@@ -82,6 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className={clsx('min-w-0 flex-1 outline-none', fullBleed > 0 ? 'pb-app-bars' : 'pb-app-chrome')}
         >
           {children}
+          <CreditLine />
         </main>
       </div>
       {isMobile && <MobileNav navOpen={navOpen} setNavOpen={setNavOpen} />}
