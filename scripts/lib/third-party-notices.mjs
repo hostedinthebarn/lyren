@@ -39,6 +39,27 @@ function licenceText(dir) {
   return files.map((f) => norm(fs.readFileSync(path.join(dir, f), 'utf8'))).join('\n\n');
 }
 
+// Build-tool code that ends up in the shipped bundle although its package is dev-only. Vite injects its
+// modulepreload polyfill into the client entry (CodeRabbit on PR #13, confirmed in dist/web: `relList.supports`),
+// so Vite's own MIT notice ships too. Only the "Vite core license" section is taken: the rest of Vite's
+// LICENSE.md covers dependencies bundled into the build tool, none of which reach the browser.
+export const INJECTED_BY_BUILD = [
+  { name: 'vite', what: 'modulepreload polyfill', file: 'LICENSE.md', from: '# Vite core license', to: '# Licenses of bundled dependencies' },
+];
+
+/** The notice text for one INJECTED_BY_BUILD entry, read from node_modules; throws if it can't be found. */
+function injectedNotice(root, lock, item) {
+  const entry = lock.packages?.[`node_modules/${item.name}`];
+  if (!entry) throw new Error(`third-party notices: ${item.name} is not in package-lock.json`);
+  const file = path.join(root, 'node_modules', item.name, item.file);
+  if (!fs.existsSync(file)) throw new Error(`third-party notices: ${item.name} is not installed (${file}); run npm ci`);
+  const all = norm(fs.readFileSync(file, 'utf8'));
+  const start = all.indexOf(item.from);
+  const end = all.indexOf(item.to);
+  if (start === -1 || end <= start) throw new Error(`third-party notices: can't find the ${item.name} notice in ${item.file}`);
+  return { label: `${item.name}@${entry.version} (${entry.license}), for its ${item.what}`, text: norm(all.slice(start, end)) };
+}
+
 /** Builds the notices text for the project at `root`. */
 export function buildNotices(root) {
   const lock = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
@@ -54,6 +75,12 @@ export function buildNotices(root) {
     if (text === '') throw new Error(`third-party notices: ${pkg.name}@${pkg.version} (${pkg.license}) ships no licence file`);
     const list = groups.get(text) ?? [];
     list.push(`${pkg.name}@${pkg.version} (${pkg.license})`);
+    groups.set(text, list);
+  }
+  for (const item of INJECTED_BY_BUILD) {
+    const { label, text } = injectedNotice(root, lock, item);
+    const list = groups.get(text) ?? [];
+    list.push(label);
     groups.set(text, list);
   }
   const rule = '='.repeat(72);

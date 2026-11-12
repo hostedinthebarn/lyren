@@ -36,6 +36,13 @@ describe('third-party notices', () => {
     expect(text).not.toContain('sharp-libvips');
   });
 
+  it("includes Vite's own MIT notice for the modulepreload polyfill it injects, not its bundled deps", () => {
+    const text = buildNotices(ROOT);
+    expect(text).toMatch(/vite@[\d.]+ \(MIT\), for its modulepreload polyfill/);
+    expect(text).toContain('Vite contributors');
+    expect(text).not.toContain('# Licenses of bundled dependencies');
+  });
+
   it('every production package carries an allowed licence', () => {
     for (const p of productionPackages(lock)) expect(ALLOWED_LICENCES.has(p.license), `${p.name}: ${p.license}`).toBe(true);
   });
