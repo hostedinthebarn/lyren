@@ -4,6 +4,7 @@
 import { clsx } from 'clsx';
 import type { ReactNode } from 'react';
 import { AppMark } from '../../components/layout/AppMark';
+import { CreditLine } from '../../components/layout/CreditLine';
 import { Card } from '../../components/ui/Card';
 
 export function AuthLayout({
@@ -34,6 +35,7 @@ export function AuthLayout({
         </Card>
         {footer && <div className="mt-6 text-center text-xs leading-relaxed text-fg-subtle">{footer}</div>}
       </main>
+      <CreditLine className="pb-6 text-center text-xs text-fg-subtle" />
     </div>
   );
 }

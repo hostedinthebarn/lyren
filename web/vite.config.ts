@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
+import { buildNotices } from '../scripts/lib/third-party-notices.mjs';
 import { apiProxyTarget } from './devProxy';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
@@ -20,13 +21,25 @@ function apiProxyInfo(target: string): Plugin {
   };
 }
 
+/** Emits /third-party-notices.txt (licences of the production dependencies; LYR-15) into a production build. */
+function thirdPartyNotices(): Plugin {
+  return {
+    name: 'lyren-third-party-notices',
+    apply: 'build',
+    generateBundle() {
+      const root = fileURLToPath(new URL('..', import.meta.url));
+      this.emitFile({ type: 'asset', fileName: 'third-party-notices.txt', source: buildNotices(root) });
+    },
+  };
+}
+
 export default defineConfig(({ command }) => {
   // Only the dev server proxies; a production build must not depend on (or fail over) PORT.
   const apiTarget = command === 'serve' ? apiProxyTarget(process.env) : null;
   return {
     root: fileURLToPath(new URL('.', import.meta.url)),
     publicDir: 'public',
-    plugins: [react(), tailwindcss(), ...(apiTarget ? [apiProxyInfo(apiTarget)] : [])],
+    plugins: [react(), tailwindcss(), thirdPartyNotices(), ...(apiTarget ? [apiProxyInfo(apiTarget)] : [])],
     resolve: {
       alias: {
         '@shared': fileURLToPath(new URL('../shared/src', import.meta.url)),
