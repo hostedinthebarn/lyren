@@ -5,6 +5,7 @@
 import { clsx } from 'clsx';
 import {
   Activity,
+  ArrowUpDown,
   ChevronRight,
   ChevronsUpDown,
   FolderKanban,
@@ -38,6 +39,7 @@ import { Menu, type MenuItem } from '../ui/Menu';
 import { Tooltip } from '../ui/Tooltip';
 import { AppMark } from './AppMark';
 import { SpaceSwitcherButton, SpaceSwitcherMenu, SpaceTile } from './SpaceSwitcher';
+import { isProjectSort, PROJECT_SORT_KEY, PROJECT_SORTS, sortProjects, type ProjectSort } from './projectSort';
 import { isBoolean, usePersistentState } from './usePersistentState';
 import { useCreateTaskDefaults, useSignOut } from './useShellActions';
 import { useThemePreference } from './useShellState';
@@ -66,7 +68,11 @@ function ExpandedSidebar({ onCollapse }: { onCollapse: () => void }) {
   const { write } = useSpace().permissions;
   const { projects, boards } = useLookups();
   const getCreateDefaults = useCreateTaskDefaults();
-  const activeProjects = projects.filter((p) => p.status !== 'archived');
+  const [projectsSort, setProjectsSort] = usePersistentState<ProjectSort>(PROJECT_SORT_KEY, 'manual', isProjectSort);
+  const activeProjects = sortProjects(
+    projects.filter((p) => p.status !== 'archived'),
+    projectsSort,
+  );
   const globalBoards = boards.filter((b) => b.projectId === null);
   const [projectsOpen, setProjectsOpen] = usePersistentState('lyren.sidebar.projectsOpen', true, isBoolean);
   const [boardsOpen, setBoardsOpen] = usePersistentState('lyren.sidebar.boardsOpen', true, isBoolean);
@@ -107,7 +113,13 @@ function ExpandedSidebar({ onCollapse }: { onCollapse: () => void }) {
           <NavItem to={sp('/worklog')} icon={<Timer />} label="Work log" />
         </div>
 
-        <NavSection label="Projects" to={sp('/projects')} open={projectsOpen} onToggle={() => setProjectsOpen((o) => !o)}>
+        <NavSection
+          label="Projects"
+          to={sp('/projects')}
+          open={projectsOpen}
+          onToggle={() => setProjectsOpen((o) => !o)}
+          actions={<ProjectSortMenu value={projectsSort} onChange={setProjectsSort} />}
+        >
           {activeProjects.map((p) => (
             <NavItem
               key={p.id}
@@ -215,7 +227,21 @@ function RailItem({ to, icon, label }: { to: string; icon: ReactNode; label: str
   );
 }
 
-function NavSection({ label, to, open, onToggle, children }: { label: string; to: string; open: boolean; onToggle: () => void; children: ReactNode }) {
+function NavSection({
+  label,
+  to,
+  open,
+  onToggle,
+  actions,
+  children,
+}: {
+  label: string;
+  to: string;
+  open: boolean;
+  onToggle: () => void;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="mt-5 flex flex-col gap-px">
       <div className="group/section flex h-7 items-center gap-1 pl-2 pr-1">
@@ -228,6 +254,7 @@ function NavSection({ label, to, open, onToggle, children }: { label: string; to
         >
           {label}
         </NavLink>
+        {actions}
         <button
           type="button"
           aria-label={`${open ? 'Hide' : 'Show'} ${label.toLowerCase()}`}
@@ -240,6 +267,29 @@ function NavSection({ label, to, open, onToggle, children }: { label: string; to
       </div>
       {open && children}
     </div>
+  );
+}
+
+/** The Projects section's sort control: a menu of the five orders, the current one checked and shown. */
+function ProjectSortMenu({ value, onChange }: { value: ProjectSort; onChange: (next: ProjectSort) => void }) {
+  const current = PROJECT_SORTS.find((s) => s.value === value)!;
+  return (
+    <Menu
+      label="Sort projects"
+      placement="bottom-end"
+      items={PROJECT_SORTS.map((s) => ({ label: s.label, checked: s.value === value, onSelect: () => onChange(s.value) }))}
+      trigger={
+        <button
+          type="button"
+          aria-label={`Sort projects (now: ${current.label})`}
+          title={`Sort projects: ${current.label}`}
+          className="flex h-6 items-center gap-1 rounded px-1 text-fg-subtle hover:bg-surface-2 hover:text-fg aria-expanded:bg-surface-2"
+        >
+          {value !== 'manual' && <span className="font-mono text-[10.5px] font-normal normal-case tracking-normal">{current.short}</span>}
+          <ArrowUpDown aria-hidden className="size-3.5" />
+        </button>
+      }
+    />
   );
 }
 
