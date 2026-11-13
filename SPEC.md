@@ -98,7 +98,7 @@ report it instead.
 | Layer   | Choice |
 |---------|--------|
 | Runtime | Node.js ≥ 22.13 (dev: 24). **`node:sqlite`** built-in (no native modules). |
-| Server  | Hono 4.13.16, pinned exactly (the gate relies on `matchedRoutes`, design Appendix D 2) + @hono/node-server 1, zod 4, fractional-indexing 3, @simplewebauthn/server 14.0.3 (passkeys; npm `overrides` hold its @peculiar/asn1-* at 2.10.0, @peculiar/x509 at 2.1.0 and asn1js at 3.0.10). Bundled to one file by esbuild. |
+| Server  | Hono 4.13.16, pinned exactly (the gate relies on `matchedRoutes`, design Appendix D 2) + @hono/node-server 2.1.6 (^2.1.6), zod 4, fractional-indexing 3, @simplewebauthn/server 14.0.3 (passkeys; npm `overrides` hold its @peculiar/asn1-* at 2.10.0, @peculiar/x509 at 2.1.0 and asn1js at 3.0.10). Bundled to one file by esbuild. |
 | Web     | React 19, react-router 7 (library mode, import from `react-router`), @tanstack/react-query 5, Tailwind CSS 4, @dnd-kit/core 6 + sortable 10 + utilities 3, @floating-ui/react 0.27, lucide-react (0.5xx icon names), react-markdown 10 + remark-gfm 4, clsx, @simplewebauthn/browser 14.0.0. |
 | Tests   | vitest 4, two projects (§10): `node` (node environment) and `workers` (@cloudflare/vitest-plugin 1.5.0, in workerd). |
 | TS      | TypeScript 5.9, strict, `noUncheckedIndexedAccess`, `verbatimModuleSyntax` (use `import type`). |
