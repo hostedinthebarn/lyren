@@ -193,4 +193,14 @@ jobs:
               bad=1
             fi
           done
+          # LYR-20: the licence notices (LYR-15) must be the real file, not the app shell. A plain 200 proves nothing
+          # on a single-page app. Hand-tested 2026-11-16: the real file passes; a made-up .txt path fails.
+          code=$(get /third-party-notices.txt notices)
+          if [[ $code == 200 ]] && ! cmp -s notices shell && grep -qF "Copyright (c) 2026 Darren Eberly" notices \
+             && grep -qF "Permission is hereby granted, free of charge" notices; then
+            echo "ok   /third-party-notices.txt ($code, $(wc -c < notices) bytes, carries Darren Eberly's MIT notice)"
+          else
+            echo "::error::/third-party-notices.txt answers $code, is the app shell, or lacks Darren Eberly's MIT notice"
+            bad=1
+          fi
           exit $bad
