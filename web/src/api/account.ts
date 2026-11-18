@@ -59,6 +59,7 @@ export function definedPreferences(patch: PreferencesUpdateInput): Partial<UserP
   return {
     ...(patch.weekStartsOn !== undefined && { weekStartsOn: patch.weekStartsOn }),
     ...(patch.homePage !== undefined && { homePage: patch.homePage }),
+    ...(patch.dashboardScope !== undefined && { dashboardScope: patch.dashboardScope }),
   };
 }
 

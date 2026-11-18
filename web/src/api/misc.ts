@@ -5,12 +5,23 @@ import { useSpaceId } from '../app/space';
 import { qs, spaceApi } from './client';
 import { qk } from './keys';
 
-/** `weekStartsOn`: the account's preference (the week's totals). */
-export function useDashboard(today: string, weekStartsOn: WeekStart) {
+/** The `assignees` query parameter of GET /api/dashboard: ids and `none`, comma-separated ('' = everyone). */
+export function assigneesParam(ids: readonly (number | null)[]): string {
+  return ids.map((id) => (id === null ? 'none' : String(id))).join(',');
+}
+
+/**
+ * `weekStartsOn`: the account's preference (the week's totals). `assignees`: only their tasks (LYR-17; null =
+ * unassigned), everyone's when empty.
+ */
+export function useDashboard(today: string, weekStartsOn: WeekStart, assignees: readonly (number | null)[] = []) {
   const sid = useSpaceId();
+  const param = assigneesParam(assignees);
   return useQuery({
-    queryKey: qk.dashboard(sid, today, weekStartsOn),
-    queryFn: () => spaceApi(sid).get<DashboardDTO>(`/dashboard${qs({ today, weekStartsOn })}`),
+    queryKey: qk.dashboard(sid, today, weekStartsOn, param),
+    queryFn: () => spaceApi(sid).get<DashboardDTO>(`/dashboard${qs({ today, weekStartsOn, ...(param && { assignees: param }) })}`),
+    // Switching whose tasks are shown keeps the old numbers on screen until the new ones arrive.
+    placeholderData: keepPreviousData,
   });
 }
 

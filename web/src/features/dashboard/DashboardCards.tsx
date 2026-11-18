@@ -155,6 +155,8 @@ export interface TaskSectionProps {
   empty: { icon: ReactNode; text: ReactNode };
   fields?: Partial<CardFields>;
   hide?: RowHideKey[];
+  /** The dashboard's assignee filter (LYR-17): a truncated list loads the rest of these assignees' tasks. */
+  assigneeIds?: readonly (number | null)[];
 }
 
 /**
@@ -162,10 +164,10 @@ export interface TaskSectionProps {
  * server truncated loads in full when expanded (rendered a page at a time), so every task is
  * reachable.
  */
-export function TaskSection({ id, section, title, icon, tone, tasks, total, today, empty, fields, hide }: TaskSectionProps) {
+export function TaskSection({ id, section, title, icon, tone, tasks, total, today, empty, fields, hide, assigneeIds }: TaskSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const live = useTaskOverlay();
-  const full = useFullSection(section, today, expanded && total > tasks.length);
+  const full = useFullSection(section, today, expanded && total > tasks.length, assigneeIds);
   const rows = expanded ? (full.tasks ?? tasks) : tasks.slice(0, PREVIEW_ROWS);
   // Rows not on screen: of the loaded section while expanded, else of the dashboard's total.
   const hidden = expanded && full.tasks ? full.remaining : Math.max(0, Math.max(total, tasks.length) - rows.length);

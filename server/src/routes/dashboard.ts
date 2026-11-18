@@ -1,6 +1,8 @@
-// GET /api/dashboard?today=&weekStartsOn= — the home page in one request: open tasks by due date, work
+// GET /api/dashboard?today=&weekStartsOn=&assignees= — the home page in one request: open tasks by due date, work
 // in progress, recently closed tasks, the latest activity and the time the viewer logged today / this
-// week (weekStartsOn is the viewer's preference, default 1 = Monday).
+// week (weekStartsOn is the viewer's preference, default 1 = Monday). `assignees` (LYR-17: ids, `none` for unassigned)
+// narrows every task section, the counts and the slipped total to those assignees' tasks; activity and the
+// viewer's logged time are not task lists and stay as they are.
 // The task lists are capped (DASHBOARD_LIMITS); `counts` carries each section's uncapped total
 // and `inProgressProjects` the number of projects with started work, so tiles never guess.
 //
@@ -45,10 +47,10 @@ const CLOSED_CATEGORIES: StatusCategory[] = STATUS_CATEGORIES.filter((c) => isCl
 /** The columns the dashboard reads of every task. */
 type DashboardTask = Pick<
   TaskRow,
-  'id' | 'project_id' | 'status_id' | 'due_date' | 'priority' | 'rank' | 'completed_at' | 'updated_at' | 'archived_at'
+  'id' | 'project_id' | 'status_id' | 'assignee_id' | 'due_date' | 'priority' | 'rank' | 'completed_at' | 'updated_at' | 'archived_at'
 >;
 
-const DASHBOARD_COLUMNS = 'id, project_id, status_id, due_date, priority, rank, completed_at, updated_at, archived_at';
+const DASHBOARD_COLUMNS = 'id, project_id, status_id, assignee_id, due_date, priority, rank, completed_at, updated_at, archived_at';
 
 type Order = (a: DashboardTask, b: DashboardTask) => number;
 
@@ -85,7 +87,7 @@ interface DashboardScope extends TaskWhereContext {
 }
 
 /** The TaskFilter keys the dashboard's sections use; matchesSection refuses any other. */
-const SECTION_FILTER_KEYS = new Set<keyof TaskFilter>(['statusCategories', 'due', 'dueFrom', 'dueTo', 'closedWithinDays']);
+const SECTION_FILTER_KEYS = new Set<keyof TaskFilter>(['statusCategories', 'due', 'dueFrom', 'dueTo', 'closedWithinDays', 'assigneeIds']);
 
 /**
  * buildTaskWhere's condition for one section's filter (of SECTION_FILTER_KEYS), in JS. A task whose project or
@@ -100,6 +102,8 @@ function matchesSection(task: DashboardTask, filter: TaskFilter, scope: Dashboar
   // Not of an archived project, not archived (the filter's defaults).
   if (projectStatus === 'archived' || task.archived_at !== null) return false;
   if (filter.statusCategories?.length && !filter.statusCategories.includes(category)) return false;
+  // nullableIn('t.assignee_id', …): one of the ids, or unassigned where the list holds null.
+  if (filter.assigneeIds?.length && !filter.assigneeIds.includes(task.assignee_id)) return false;
   if (filter.due?.length) {
     const hit = filter.due.some((preset) => {
       const r = resolveDuePreset(preset, scope.today, scope.weekStartsOn);
@@ -156,9 +160,13 @@ function worklogTotals(db: Db, today: string, weekStartsOn: WeekStart, userId: n
   return { todayMinutes: row?.today_minutes ?? 0, weekMinutes: row?.week_minutes ?? 0 };
 }
 
-/** The filter behind each dashboard section (POST /api/tasks/query accepts the same filters). */
-function dashboardFilters(today: string): Record<keyof DashboardDTO['counts'], TaskFilter> {
-  return {
+/**
+ * The filter behind each dashboard section (POST /api/tasks/query accepts the same filters), narrowed to
+ * `assigneeIds` when given (LYR-17).
+ */
+function dashboardFilters(today: string, assigneeIds?: readonly (number | null)[]): Record<keyof DashboardDTO['counts'], TaskFilter> {
+  const who: TaskFilter = assigneeIds?.length ? { assigneeIds: [...assigneeIds] } : {};
+  const filters: Record<keyof DashboardDTO['counts'], TaskFilter> = {
     overdue: { due: ['overdue'] },
     dueToday: { due: ['today'], statusCategories: OPEN_CATEGORIES },
     dueSoon: {
@@ -169,13 +177,19 @@ function dashboardFilters(today: string): Record<keyof DashboardDTO['counts'], T
     inProgress: { statusCategories: ['started'] },
     recentlyClosed: { statusCategories: CLOSED_CATEGORIES, closedWithinDays: DASHBOARD_LIMITS.recentlyClosedDays },
   };
+  for (const key of Object.keys(filters) as Array<keyof typeof filters>) filters[key] = { ...filters[key], ...who };
+  return filters;
 }
 
-/** The dashboard of `userId` (exported for the equivalence test, server/test/contract/stats.contract.ts). */
-export function buildDashboard(db: Db, ctx: TaskWhereContext, userId: number): DashboardDTO {
+/**
+ * The dashboard of `userId`, of `assigneeIds`' tasks when given (exported for the equivalence test,
+ * server/test/contract/stats.contract.ts).
+ */
+export function buildDashboard(db: Db, ctx: TaskWhereContext, userId: number, assigneeIds?: readonly (number | null)[]): DashboardDTO {
   const { today, weekStartsOn } = ctx;
   const { list } = DASHBOARD_LIMITS;
-  const filters = dashboardFilters(today);
+  const filters = dashboardFilters(today, assigneeIds);
+  const who: TaskFilter = assigneeIds?.length ? { assigneeIds: [...assigneeIds] } : {};
   const schedule = readSchedule(db, today);
   const slipped = slips(schedule);
   const scope: DashboardScope = {
@@ -193,7 +207,7 @@ export function buildDashboard(db: Db, ctx: TaskWhereContext, userId: number): D
   const tasks = db
     .all<DashboardTask>(`SELECT ${DASHBOARD_COLUMNS} FROM tasks`)
     .map((t) => (slipped.has(t.id) ? { ...t, due_date: slipped.get(t.id)! } : t));
-  const slippedOpen = tasks.filter((t) => slipped.has(t.id) && matchesSection(t, { statusCategories: OPEN_CATEGORIES }, scope)).length;
+  const slippedOpen = tasks.filter((t) => slipped.has(t.id) && matchesSection(t, { statusCategories: OPEN_CATEGORIES, ...who }, scope)).length;
   const overdue = section(tasks, filters.overdue, scope, ORDER.overdue, list);
   const dueToday = section(tasks, filters.dueToday, scope, ORDER.dueToday, list);
   const dueSoon = section(tasks, filters.dueSoon, scope, ORDER.dueSoon, list);
@@ -228,8 +242,8 @@ export function dashboardRoutes({ db }: Deps) {
   const r = new Hono<AppEnv>();
 
   r.get('/', (c) => {
-    const { today = serverToday(), weekStartsOn = 1 } = readQuery(c, dashboardQueryInput);
-    return c.json(buildDashboard(db, { today, weekStartsOn, nowMs: Date.now() }, currentUser(c).id));
+    const { today = serverToday(), weekStartsOn = 1, assignees } = readQuery(c, dashboardQueryInput);
+    return c.json(buildDashboard(db, { today, weekStartsOn, nowMs: Date.now() }, currentUser(c).id, assignees));
   });
 
   return r;

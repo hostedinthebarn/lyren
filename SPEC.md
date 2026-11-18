@@ -432,7 +432,8 @@ listed in `ActivityAction` (shared/src/types.ts). `data` follows `ActivityData`:
 Split (design §3.6): each space stores its `SpaceSettings` (`estimateUnit`, `defaultBoardId`) per key as JSON
 in its `settings` table; `GET /api/settings` returns `DEFAULT_SPACE_SETTINGS` merged with stored values (other
 keys, `weekStartsOn` and `homePage` included, are ignored, and PATCH strips them). Each account's
-`UserPreferences` (`weekStartsOn`, `homePage`) are `PATCH /api/account/preferences` in the directory; server
+`UserPreferences` (`weekStartsOn`, `homePage`, `dashboardScope`: `everyone` / `me` / `me_unassigned`, the dashboard's
+remembered "whose tasks", LYR-17) are `PATCH /api/account/preferences` in the directory; server
 code that needs `weekStartsOn` takes it from the request (`POST /api/tasks/query` body, `GET /api/dashboard?weekStartsOn=`),
 default 1. Keys starting with `_` are internal (never exported/overwritten by import). `defaultBoardId` must
 reference an existing board (or null). Deleting that board (directly or via project cascade) resets it to null.
@@ -657,7 +658,7 @@ only, need no `X-Lyren-Request` header, and get 401 on every account, space-list
 | POST `/api/data/import/analyze?mode=new\|replace` | multipart `file` | `ImportAnalysisDTO` (§5.10; owner, re-auth for `replace`; `new` only while the space is `importing`) |
 | POST `/api/data/import/commit?mode=new\|replace` | multipart `file`, `mapping` (JSON `ImportMappingInput`) | `ImportResultDTO` (§5.10; 409 `quota_exceeded` over `IMPORT_MAX_ROW_WRITES`, 429 past the day's import budget) |
 | POST `/api/people/:personId/reassign` · POST `/api/people/me/disown` | `PeopleReassignInput` · – | `PeopleReassignedDTO` (admins and owners) · `PeopleDisownedDTO` (anyone) |
-| GET `/api/dashboard?today=&weekStartsOn=` | – | `DashboardDTO` (lists capped at 50 / 20; `counts` = uncapped totals per list, `inProgressProjects` = distinct projects with started tasks; `slipped` = open slipped tasks; `worklog` = the viewer's own time) |
+| GET `/api/dashboard?today=&weekStartsOn=&assignees=` | – | `DashboardDTO` (lists capped at 50 / 20; `counts` = uncapped totals per list, `inProgressProjects` = distinct projects with started tasks; `slipped` = open slipped tasks; `worklog` = the viewer's own time). `assignees` (LYR-17): comma-separated person ids, `none` = unassigned; narrows every list, count and `slipped` to those assignees' tasks (`assigneeIds` filter semantics); absent = everyone; `recentActivity` and `worklog` are unchanged |
 | GET `/api/search?q&limit` | `SearchQueryInput` | `SearchResultDTO` (tasks of every project, archived tasks included and ranked after live ones at equal relevance) |
 
 The instance backup is the directory's `GET /api/admin/backup` (design §9.5); the space app has no backup route.

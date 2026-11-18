@@ -13,6 +13,11 @@ import {
   greetingFor,
   nextMilestone,
   type DashboardSection,
+  parseAssigneeParam,
+  parseWhoValue,
+  whoAssignees,
+  whoValue,
+  type DashboardWho,
 } from './dashboardModel';
 
 const milestone = (id: number, patch: Partial<MilestoneDTO>): MilestoneDTO =>
@@ -147,5 +152,36 @@ describe('dashboard section queries', () => {
     expect([...wip].sort(compareDashboardTasks('inProgress')).map((x) => x.id)).toEqual([2, 3, 1]);
     const done = [closed(1, 2), closed(2, null), closed(3, 1), closed(4, 2)];
     expect([...done].sort(compareDashboardTasks('recentlyClosed')).map((x) => x.id)).toEqual([3, 4, 1, 2]);
+  });
+});
+
+describe('whose tasks (LYR-17)', () => {
+  it('turns a remembered scope or one picked assignee into assignee ids (null = unassigned)', () => {
+    expect(whoAssignees({ scope: 'everyone' }, 3)).toEqual([]);
+    expect(whoAssignees({ scope: 'me' }, 3)).toEqual([3]);
+    expect(whoAssignees({ scope: 'me_unassigned' }, 3)).toEqual([3, null]);
+    expect(whoAssignees({ assignee: 10 }, 3)).toEqual([10]);
+    expect(whoAssignees({ assignee: null }, 3)).toEqual([null]);
+  });
+
+  it('reads ?assignee= as one person or unassigned, and ignores anything else (the preference applies)', () => {
+    expect(parseAssigneeParam('10')).toEqual({ assignee: 10 });
+    expect(parseAssigneeParam('none')).toEqual({ assignee: null });
+    for (const bad of [null, '', '0', '-1', 'bob', '1.5', '10,11', '1234567890123456']) expect(parseAssigneeParam(bad), String(bad)).toBeNull();
+  });
+
+  it('round-trips the select’s values', () => {
+    const choices: DashboardWho[] = [{ scope: 'everyone' }, { scope: 'me' }, { scope: 'me_unassigned' }, { assignee: 10 }, { assignee: null }];
+    for (const who of choices) expect(parseWhoValue(whoValue(who))).toEqual(who);
+    expect(parseWhoValue('scope:nobody')).toBeNull();
+    expect(parseWhoValue('person:x')).toBeNull();
+  });
+
+  it('narrows every section’s filter to the assignees, and leaves it alone for everyone', () => {
+    for (const section of ['overdue', 'dueToday', 'dueSoon', 'inProgress', 'recentlyClosed', 'slipped'] as const) {
+      expect(dashboardSectionFilter(section, '2026-05-20').assigneeIds, section).toBeUndefined();
+      expect(dashboardSectionFilter(section, '2026-05-20', [3, null]).assigneeIds, section).toEqual([3, null]);
+      expect(dashboardSectionQuery(section, '2026-05-20', 50, [3]).filter?.assigneeIds, section).toEqual([3]);
+    }
   });
 });

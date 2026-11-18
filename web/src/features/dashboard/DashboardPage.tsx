@@ -17,34 +17,68 @@ import {
   Timer,
   Trophy,
 } from 'lucide-react';
+import { useMemo } from 'react';
+import { useSearchParams } from 'react-router';
 import { addDays } from '@shared/dates';
 import { formatMinutes } from '@shared/duration';
 import type { DashboardDTO } from '@shared/types';
+import { useUpdatePreferences } from '../../api/account';
 import { useLookups } from '../../api/bootstrap';
 import { useDashboard } from '../../api/misc';
 import { useTaskQuery } from '../../api/tasks';
 import { useSpace, useSpacePath } from '../../app/space';
 import { Page } from '../../components/layout/Page';
 import { PageHeader } from '../../components/layout/PageHeader';
-import { ButtonLink, Card, EmptyState, ErrorState, Skeleton } from '../../components/ui';
+import { ButtonLink, Card, EmptyState, ErrorState, Select, Skeleton } from '../../components/ui';
 import { formatDate, formatDateLong, pluralize } from '../../lib/format';
 import { useDocumentTitle, useToday } from '../../lib/hooks';
 import { ActivityCard, ProjectsCard, StatTile, TaskSection, TaskSectionSkeleton } from './DashboardCards';
-import { dashboardSectionQuery, dueTomorrowHint, greetingFor } from './dashboardModel';
+import {
+  dashboardSectionQuery,
+  dueTomorrowHint,
+  greetingFor,
+  parseAssigneeParam,
+  parseWhoValue,
+  type DashboardWho,
+  whoAssignees,
+  whoValue,
+} from './dashboardModel';
 
 export default function DashboardPage() {
   useDocumentTitle('Dashboard');
   const today = useToday();
   const { user, projects, settings } = useLookups();
-  const dashboard = useDashboard(today, settings.weekStartsOn);
+  const [params, setParams] = useSearchParams();
+  // Whose tasks (LYR-17): one assignee picked for now (?assignee=), else the account's remembered scope.
+  const who: DashboardWho = parseAssigneeParam(params.get('assignee')) ?? { scope: settings.dashboardScope };
+  const whoKey = whoValue(who);
+  // Keyed on the choice's string, so the ids (and the query key) only change when the choice does.
+  const assigneeIds = useMemo(() => whoAssignees(parseWhoValue(whoKey) ?? { scope: 'everyone' }, user.id), [whoKey, user.id]);
+  const dashboard = useDashboard(today, settings.weekStartsOn, assigneeIds);
+  const updatePreferences = useUpdatePreferences();
+
+  const choose = (value: string) => {
+    const next = parseWhoValue(value);
+    if (!next) return;
+    if ('scope' in next) {
+      if (next.scope !== settings.dashboardScope) updatePreferences.mutate({ dashboardScope: next.scope });
+      if (params.has('assignee')) setParams((p) => (p.delete('assignee'), p), { replace: true });
+    } else {
+      setParams((p) => (p.set('assignee', next.assignee === null ? 'none' : String(next.assignee)), p), { replace: true });
+    }
+  };
 
   const header = (
-    <PageHeader title={`${greetingFor(new Date().getHours())}, ${user.displayName}`} subtitle={formatDateLong(today)} />
+    <PageHeader
+      title={`${greetingFor(new Date().getHours())}, ${user.displayName}`}
+      subtitle={formatDateLong(today)}
+      actions={projects.length > 0 && <WhoSelect value={whoKey} onChange={choose} />}
+    />
   );
 
   let content;
   if (projects.length === 0) content = <Welcome />;
-  else if (dashboard.data) content = <DashboardContent data={dashboard.data} today={today} />;
+  else if (dashboard.data) content = <DashboardContent data={dashboard.data} today={today} assigneeIds={assigneeIds} />;
   else if (dashboard.isError) content = <ErrorState error={dashboard.error} onRetry={() => void dashboard.refetch()} />;
   else content = <DashboardSkeleton />;
 
@@ -59,8 +93,45 @@ export default function DashboardPage() {
  * Open tasks whose blockers push their due date later (task dependencies): only while there are any. The
  * dashboard counts them; the list comes from the slipped filter.
  */
-function SlippedSection({ total, today }: { total: number; today: string }) {
-  const query = useTaskQuery(dashboardSectionQuery('slipped', today, 50));
+/**
+ * "Whose tasks": the remembered scopes (Everyone, Me, Me + unassigned; saved as the account's preference),
+ * then Unassigned and each member for the moment (?assignee=), so an agent's queue is one pick away.
+ */
+function WhoSelect({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { people, user } = useLookups();
+  const others = useMemo(
+    () =>
+      people
+        .filter((p) => p.isMember && !p.deleted && p.role !== 'viewer' && p.id !== user.id)
+        .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [people, user.id],
+  );
+  // A person picked by URL who isn't listed (a former member, say) still shows as the current choice.
+  const pickedId = value.startsWith('person:') ? Number(value.slice(7)) : NaN;
+  const unlisted = Number.isFinite(pickedId) && pickedId !== user.id && !others.some((p) => p.id === pickedId);
+  return (
+    <Select aria-label="Whose tasks" size="sm" className="w-36 sm:w-52" value={value} onChange={(e) => onChange(e.target.value)}>
+      <option value="scope:everyone">Everyone</option>
+      <option value="scope:me">My tasks</option>
+      <option value="scope:me_unassigned">Mine and unassigned</option>
+      <option value="person:none">Unassigned</option>
+      {value === `person:${user.id}` && <option value={value}>{user.displayName}</option>}
+      {unlisted && <option value={value}>Person #{pickedId}</option>}
+      {others.length > 0 && (
+        <optgroup label="Someone else">
+          {others.map((p) => (
+            <option key={p.id} value={`person:${p.id}`}>
+              {p.displayName}
+            </option>
+          ))}
+        </optgroup>
+      )}
+    </Select>
+  );
+}
+
+function SlippedSection({ total, today, assigneeIds }: { total: number; today: string; assigneeIds: readonly (number | null)[] }) {
+  const query = useTaskQuery(dashboardSectionQuery('slipped', today, 50, assigneeIds));
   return (
     <TaskSection
       id="slipped"
@@ -76,7 +147,7 @@ function SlippedSection({ total, today }: { total: number; today: string }) {
   );
 }
 
-function DashboardContent({ data, today }: { data: DashboardDTO; today: string }) {
+function DashboardContent({ data, today, assigneeIds }: { data: DashboardDTO; today: string; assigneeIds: readonly (number | null)[] }) {
   const sp = useSpacePath();
   const { counts } = data;
   const oldestOverdue = data.overdue[0]?.dueDate ?? null;
@@ -147,9 +218,10 @@ function DashboardContent({ data, today }: { data: DashboardDTO; today: string }
             tasks={data.overdue}
             total={counts.overdue}
             today={today}
+            assigneeIds={assigneeIds}
             empty={{ icon: <PartyPopper />, text: 'Nothing overdue — you’re all caught up.' }}
           />
-          {data.slipped > 0 && <SlippedSection total={data.slipped} today={today} />}
+          {data.slipped > 0 && <SlippedSection total={data.slipped} today={today} assigneeIds={assigneeIds} />}
           <TaskSection
             id="due-today"
             section="dueToday"
@@ -159,6 +231,7 @@ function DashboardContent({ data, today }: { data: DashboardDTO; today: string }
             tasks={data.dueToday}
             total={counts.dueToday}
             today={today}
+            assigneeIds={assigneeIds}
             fields={{ dueDate: false }}
             empty={{ icon: <Coffee />, text: 'Nothing due today. A good day to get ahead.' }}
           />
@@ -171,6 +244,7 @@ function DashboardContent({ data, today }: { data: DashboardDTO; today: string }
             tasks={data.dueSoon}
             total={counts.dueSoon}
             today={today}
+            assigneeIds={assigneeIds}
             empty={{ icon: <CalendarCheck />, text: 'The week ahead is clear.' }}
           />
           <TaskSection
@@ -182,6 +256,7 @@ function DashboardContent({ data, today }: { data: DashboardDTO; today: string }
             tasks={data.inProgress}
             total={counts.inProgress}
             today={today}
+            assigneeIds={assigneeIds}
             empty={{ icon: <Sparkles />, text: 'Nothing in progress. Pick a task and get going.' }}
           />
           <TaskSection
@@ -193,6 +268,7 @@ function DashboardContent({ data, today }: { data: DashboardDTO; today: string }
             tasks={data.recentlyClosed}
             total={counts.recentlyClosed}
             today={today}
+            assigneeIds={assigneeIds}
             empty={{ icon: <Trophy />, text: 'Tasks you finish this week will gather here.' }}
           />
         </div>

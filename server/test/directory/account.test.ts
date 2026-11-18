@@ -34,10 +34,25 @@ describe('GET/PATCH /api/account', () => {
   it('stores preferences per user, merged with what is there', async () => {
     const h = createDirectoryHarness();
     const { client } = await h.setup();
-    expect((await client.patch('/api/account/preferences', { weekStartsOn: 0 })).body).toEqual({ weekStartsOn: 0, homePage: 'dashboard' });
-    expect((await client.patch('/api/account/preferences', { homePage: 'default_board' })).body).toEqual({ weekStartsOn: 0, homePage: 'default_board' });
+    expect((await client.patch('/api/account/preferences', { weekStartsOn: 0 })).body).toEqual({ weekStartsOn: 0, homePage: 'dashboard', dashboardScope: 'everyone' });
+    expect((await client.patch('/api/account/preferences', { homePage: 'default_board' })).body).toEqual({
+      weekStartsOn: 0,
+      homePage: 'default_board',
+      dashboardScope: 'everyone',
+    });
+    // LYR-17: the dashboard's remembered "whose tasks" scope.
+    expect((await client.patch('/api/account/preferences', { dashboardScope: 'me_unassigned' })).body).toEqual({
+      weekStartsOn: 0,
+      homePage: 'default_board',
+      dashboardScope: 'me_unassigned',
+    });
     expect((await client.patch('/api/account/preferences', { weekStartsOn: 3 })).status).toBe(400);
-    expect((await client.get<AuthStatusDTO>('/api/auth/status')).body.preferences).toEqual({ weekStartsOn: 0, homePage: 'default_board' });
+    expect((await client.patch('/api/account/preferences', { dashboardScope: 'someone' })).status).toBe(400);
+    expect((await client.get<AuthStatusDTO>('/api/auth/status')).body.preferences).toEqual({
+      weekStartsOn: 0,
+      homePage: 'default_board',
+      dashboardScope: 'me_unassigned',
+    });
   });
 });
 

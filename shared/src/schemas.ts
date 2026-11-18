@@ -43,6 +43,9 @@ export const weekStartSchema = z.literal([0, 1]);
 /** weekStartsOn in a query string: '0' (Sunday) or '1' (Monday). */
 export const weekStartParamSchema = z.enum(['0', '1']).transform((v): WeekStart => (v === '0' ? 0 : 1));
 export const homePageSchema = z.enum(['dashboard', 'default_board']);
+/** Whose tasks the dashboard shows by default (LYR-17): everyone's, the viewer's, or the viewer's and the unassigned. */
+export const dashboardScopeSchema = z.enum(['everyone', 'me', 'me_unassigned']);
+export type DashboardScope = z.infer<typeof dashboardScopeSchema>;
 export const spaceRoleSchema = z.enum(SPACE_ROLES);
 
 const nameSchema = z.string().trim().min(1, 'Required').max(LIMITS.nameMax);
@@ -508,6 +511,7 @@ export type SpaceSettings = z.infer<typeof spaceSettingsSchema>;
 export const userPreferencesSchema = z.object({
   weekStartsOn: weekStartSchema,
   homePage: homePageSchema,
+  dashboardScope: dashboardScopeSchema,
 });
 export type UserPreferences = z.infer<typeof userPreferencesSchema>;
 
@@ -516,17 +520,19 @@ export const settingsSchema = z.object({
   estimateUnit: spaceSettingsSchema.shape.estimateUnit,
   defaultBoardId: spaceSettingsSchema.shape.defaultBoardId,
   homePage: userPreferencesSchema.shape.homePage,
+  dashboardScope: userPreferencesSchema.shape.dashboardScope,
 });
 export type Settings = z.infer<typeof settingsSchema>;
 
 export const DEFAULT_SPACE_SETTINGS: SpaceSettings = { estimateUnit: 'points', defaultBoardId: null };
-export const DEFAULT_PREFERENCES: UserPreferences = { weekStartsOn: 1, homePage: 'dashboard' };
+export const DEFAULT_PREFERENCES: UserPreferences = { weekStartsOn: 1, homePage: 'dashboard', dashboardScope: 'everyone' };
 
 export const DEFAULT_SETTINGS: Settings = {
   weekStartsOn: DEFAULT_PREFERENCES.weekStartsOn,
   estimateUnit: DEFAULT_SPACE_SETTINGS.estimateUnit,
   defaultBoardId: DEFAULT_SPACE_SETTINGS.defaultBoardId,
   homePage: DEFAULT_PREFERENCES.homePage,
+  dashboardScope: DEFAULT_PREFERENCES.dashboardScope,
 };
 
 /** PATCH /api/s/:spaceId/settings (admin). */
@@ -540,6 +546,7 @@ export type SpaceSettingsUpdateInput = z.input<typeof spaceSettingsUpdateInput>;
 export const preferencesUpdateInput = z.object({
   weekStartsOn: weekStartSchema.optional(),
   homePage: homePageSchema.optional(),
+  dashboardScope: dashboardScopeSchema.optional(),
 });
 export type PreferencesUpdateInput = z.input<typeof preferencesUpdateInput>;
 
@@ -573,10 +580,24 @@ export const rebaselineInput = z
   });
 export type RebaselineInput = z.output<typeof rebaselineInput>;
 
+/**
+ * `assignees` in a query string (LYR-17): comma-separated person ids, `none` for unassigned, e.g. `3,none`.
+ * Parsed to TaskFilter.assigneeIds (null = unassigned); absent or empty = everyone.
+ */
+export const assigneesParamSchema = z
+  .string()
+  .max(1000)
+  .regex(/^(?:(?:\d{1,15}|none)(?:,(?:\d{1,15}|none))*)?$/, 'Comma-separated person ids or none')
+  .transform((v): Array<number | null> =>
+    v === '' ? [] : [...new Set(v.split(','))].map((p) => (p === 'none' ? null : Number(p))).filter((p) => p === null || p > 0),
+  );
+
 export const dashboardQueryInput = z.object({
   today: isoDateSchema.optional(),
   /** The viewer's preference (UserPreferences.weekStartsOn); default 1 (Monday). */
   weekStartsOn: weekStartParamSchema.optional(),
+  /** Only these assignees' tasks (LYR-17); absent = everyone's. */
+  assignees: assigneesParamSchema.optional(),
 });
 
 // ---------------------------------------------------------------------------

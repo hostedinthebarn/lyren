@@ -3,7 +3,7 @@
 import { isClosedCategory, STATUS_CATEGORIES, type StatusCategory } from '@shared/constants';
 import { addDays } from '@shared/dates';
 import { effectiveDueDate } from '@shared/filter';
-import type { TaskFilter, TaskQueryInput, TaskSort } from '@shared/schemas';
+import type { DashboardScope, TaskFilter, TaskQueryInput, TaskSort } from '@shared/schemas';
 import type { DashboardDTO, MilestoneDTO, ProjectDTO, TaskDTO } from '@shared/types';
 
 /** "Good morning" (5–11), "Good afternoon" (12–17), else "Good evening". */
@@ -56,8 +56,13 @@ export const DASHBOARD_WINDOWS = { dueSoonDays: 7, recentlyClosedDays: 7 } as co
 const OPEN_CATEGORIES: StatusCategory[] = STATUS_CATEGORIES.filter((c) => !isClosedCategory(c));
 const CLOSED_CATEGORIES: StatusCategory[] = STATUS_CATEGORIES.filter((c) => isClosedCategory(c));
 
-/** The filter of each section: the same as the server's dashboardFilters(today). */
-export function dashboardSectionFilter(section: DashboardSection, today: string): TaskFilter {
+/** The filter of each section: the same as the server's dashboardFilters(today, assigneeIds). */
+export function dashboardSectionFilter(section: DashboardSection, today: string, assigneeIds: readonly (number | null)[] = []): TaskFilter {
+  const filter = sectionFilter(section, today);
+  return assigneeIds.length ? { ...filter, assigneeIds: [...assigneeIds] } : filter;
+}
+
+function sectionFilter(section: DashboardSection, today: string): TaskFilter {
   switch (section) {
     case 'overdue':
       return { due: ['overdue'] };
@@ -90,9 +95,57 @@ const SECTION_SORT: Record<DashboardSection, TaskSort> = {
   slipped: { field: 'dueDate', dir: 'asc' },
 };
 
-/** POST /api/tasks/query input for the first `limit` tasks of a section. */
-export function dashboardSectionQuery(section: DashboardSection, today: string, limit: number): TaskQueryInput {
-  return { filter: dashboardSectionFilter(section, today), sort: SECTION_SORT[section], limit, today };
+/** POST /api/tasks/query input for the first `limit` tasks of a section (of `assigneeIds`' tasks when given). */
+export function dashboardSectionQuery(
+  section: DashboardSection,
+  today: string,
+  limit: number,
+  assigneeIds: readonly (number | null)[] = [],
+): TaskQueryInput {
+  return { filter: dashboardSectionFilter(section, today, assigneeIds), sort: SECTION_SORT[section], limit, today };
+}
+
+// ---- Whose tasks (LYR-17) ------------------------------------------------------------------------
+//
+// The account's preference (UserPreferences.dashboardScope) names a scope that means the same in every
+// space; one person (an agent's queue, say) or "unassigned" alone is picked for the moment and lives in
+// the URL (?assignee=10, ?assignee=none), not in the preference, since ids differ between spaces.
+
+/** What the dashboard shows: a remembered scope, or one assignee from the URL (null = unassigned). */
+export type DashboardWho = { scope: DashboardScope } | { assignee: number | null };
+
+/** The assignee ids of `who` for the viewer `viewerId` (null = unassigned); empty = everyone. */
+export function whoAssignees(who: DashboardWho, viewerId: number): Array<number | null> {
+  if ('assignee' in who) return [who.assignee];
+  switch (who.scope) {
+    case 'everyone':
+      return [];
+    case 'me':
+      return [viewerId];
+    case 'me_unassigned':
+      return [viewerId, null];
+  }
+}
+
+/** ?assignee= → one assignee (`none` = unassigned); anything else (absent, malformed) → null, i.e. use the preference. */
+export function parseAssigneeParam(value: string | null): { assignee: number | null } | null {
+  if (value === 'none') return { assignee: null };
+  if (value && /^\d{1,15}$/.test(value) && Number(value) > 0) return { assignee: Number(value) };
+  return null;
+}
+
+/** The value of the dashboard's "whose tasks" select for `who`. */
+export function whoValue(who: DashboardWho): string {
+  return 'assignee' in who ? `person:${who.assignee ?? 'none'}` : `scope:${who.scope}`;
+}
+
+/** The select's value back to a choice; null for an unknown value. */
+export function parseWhoValue(value: string): DashboardWho | null {
+  if (value === 'scope:everyone' || value === 'scope:me' || value === 'scope:me_unassigned') {
+    return { scope: value.slice(6) as DashboardScope };
+  }
+  if (value.startsWith('person:')) return parseAssigneeParam(value.slice(7));
+  return null;
 }
 
 type Compare = (a: TaskDTO, b: TaskDTO) => number;

@@ -32,12 +32,12 @@ describe('settings API', () => {
     expect(res.body).toEqual({ estimateUnit: 'hours', defaultBoardId: defaultBoard });
     const week = await client.patch<UserPreferences>('/api/account/preferences', { weekStartsOn: 0 });
     expect(week.status).toBe(200);
-    expect(week.body).toEqual({ weekStartsOn: 0, homePage: 'dashboard' });
+    expect(week.body).toEqual({ weekStartsOn: 0, homePage: 'dashboard', dashboardScope: 'everyone' });
 
     await client.patch('/api/account/preferences', { homePage: 'default_board' });
     const boot = (await client.get<BootstrapDTO>('/api/bootstrap')).body;
     expect(boot.settings).toEqual({ estimateUnit: 'hours', defaultBoardId: defaultBoard });
-    expect(await preferences()).toEqual({ weekStartsOn: 0, homePage: 'default_board' });
+    expect(await preferences()).toEqual({ weekStartsOn: 0, homePage: 'default_board', dashboardScope: 'everyone' });
 
     const cleared = await client.patch<SpaceSettings>('/api/settings', { defaultBoardId: null });
     expect(cleared.body.defaultBoardId).toBeNull();
@@ -45,10 +45,10 @@ describe('settings API', () => {
 
     // An empty patch is a no-op.
     expect((await client.patch<SpaceSettings>('/api/settings', {})).body).toEqual(cleared.body);
-    expect((await client.patch<UserPreferences>('/api/account/preferences', {})).body).toEqual({ weekStartsOn: 0, homePage: 'default_board' });
+    expect((await client.patch<UserPreferences>('/api/account/preferences', {})).body).toEqual({ weekStartsOn: 0, homePage: 'default_board', dashboardScope: 'everyone' });
     // The space's settings ignore the per-user keys (unknown keys are stripped).
     expect((await client.patch<SpaceSettings>('/api/settings', { weekStartsOn: 1 })).body).toEqual(cleared.body);
-    expect(await preferences()).toEqual({ weekStartsOn: 0, homePage: 'default_board' });
+    expect(await preferences()).toEqual({ weekStartsOn: 0, homePage: 'default_board', dashboardScope: 'everyone' });
   });
 
   it('validates values and that the default board exists', async () => {
