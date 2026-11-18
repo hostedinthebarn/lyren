@@ -41,11 +41,12 @@ describe('splitSettingsPatch', () => {
 
 describe('buildLookups merges the account’s preferences into the space’s settings', () => {
   it('with the preferences’ defaults while there are none', () => {
-    expect(buildLookups(boot('hours'), { weekStartsOn: 0, homePage: 'default_board' }).settings).toEqual({
+    expect(buildLookups(boot('hours'), { weekStartsOn: 0, homePage: 'default_board', dashboardScope: 'everyone' }).settings).toEqual({
       estimateUnit: 'hours',
       defaultBoardId: null,
       weekStartsOn: 0,
       homePage: 'default_board',
+      dashboardScope: 'everyone',
     });
     expect(buildLookups(boot(), null).settings).toMatchObject({ weekStartsOn: 1, homePage: 'dashboard' });
   });

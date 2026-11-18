@@ -74,7 +74,8 @@ export const qk = {
   worklogsAll: (spaceId: string) => ['space', spaceId, 'worklogs'] as const,
   worklogs: (spaceId: string, params: WorklogReportQuery) => ['space', spaceId, 'worklogs', params] as const,
   dashboardAll: (spaceId: string) => ['space', spaceId, 'dashboard'] as const,
-  dashboard: (spaceId: string, today: string, weekStartsOn: number) => ['space', spaceId, 'dashboard', today, weekStartsOn] as const,
+  dashboard: (spaceId: string, today: string, weekStartsOn: number, assignees = '') =>
+    ['space', spaceId, 'dashboard', today, weekStartsOn, assignees] as const,
   searchAll: (spaceId: string) => ['space', spaceId, 'search'] as const,
   search: (spaceId: string, q: string) => ['space', spaceId, 'search', q] as const,
 };

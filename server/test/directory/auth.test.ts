@@ -78,7 +78,7 @@ describe('GET /api/auth/status', () => {
     expect(res.body.spaces).toEqual([
       { id: spaceId, name: "Owner's space", role: 'owner', status: 'active', memberCount: 1, createdAt: expect.any(String) },
     ]);
-    expect(res.body.preferences).toEqual({ weekStartsOn: 1, homePage: 'dashboard' });
+    expect(res.body.preferences).toEqual({ weekStartsOn: 1, homePage: 'dashboard', dashboardScope: 'everyone' });
     expect(res.body.reauthUntil).toBe(new Date(h.clock.now() + 10 * 60_000).toISOString());
     h.clock.advance(11 * 60_000);
     expect((await client.get<AuthStatusDTO>('/api/auth/status')).body.reauthUntil).toBeNull();

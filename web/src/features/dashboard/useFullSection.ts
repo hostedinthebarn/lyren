@@ -30,9 +30,14 @@ export interface FullSection {
   retry: () => void;
 }
 
-export function useFullSection(section: DashboardSection, today: string, enabled: boolean): FullSection {
+export function useFullSection(
+  section: DashboardSection,
+  today: string,
+  enabled: boolean,
+  assigneeIds: readonly (number | null)[] = [],
+): FullSection {
   const [shown, setShown] = useState(SECTION_PAGE);
-  const query = useTaskQuery(dashboardSectionQuery(section, today, LIMITS.queryLimitMax), { enabled });
+  const query = useTaskQuery(dashboardSectionQuery(section, today, LIMITS.queryLimitMax, assigneeIds), { enabled });
   // Disabled (collapsed, or no longer truncated), a cached answer from an earlier expansion is
   // not shown: it may be stale.
   const data = enabled ? query.data : undefined;

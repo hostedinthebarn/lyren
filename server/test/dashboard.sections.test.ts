@@ -104,3 +104,58 @@ describe('dashboard sections through POST /api/tasks/query', () => {
     expect(page.body.tasks.some((t) => t.id === latest)).toBe(false);
   });
 });
+
+describe('the dashboard narrowed to assignees (LYR-17)', () => {
+  it('lists and counts only those assignees’ tasks, as POST /api/tasks/query does with the same filter', async () => {
+    const ctx = createTestContext();
+    const owner = await ctx.signedIn();
+    const bob = await ctx.addUser({ email: 'bob@example.com', displayName: 'Bob' });
+    // The owner's next request syncs the people mirror with Bob.
+    expect((await owner.client.get('/api/bootstrap')).status).toBe(200);
+    const { db } = ctx;
+    const { client } = owner;
+    const me = owner.user.id;
+    const web = insertProject(db, 'WEB');
+    const started = statusIdByName(db, 'In Progress');
+    const done = statusIdByName(db, 'Done');
+    const assign = (id: number, assigneeId: number | null) => db.run('UPDATE tasks SET assignee_id = :a WHERE id = :id', { a: assigneeId, id });
+    const owners = [me, bob.user.id, null] as const;
+    // Every section gets tasks of all three (me, Bob, nobody), in uneven numbers so a wrong filter shows.
+    for (let i = 0; i < 64; i++) {
+      const who = owners[i % 3]!;
+      const kind = i % 4;
+      const id = insertTask(db, {
+        projectId: web,
+        title: `t ${i}`,
+        priority: (i % 5) as 0 | 1 | 2 | 3 | 4,
+        ...(kind === 0 && { dueDate: `2026-05-0${1 + (i % 9)}` }),
+        ...(kind === 1 && { dueDate: i % 8 ? TODAY : '2026-05-23' }),
+        ...(kind === 2 && { statusId: started, updatedAt: `2026-05-1${i % 10}T00:00:00.000Z` }),
+        ...(kind === 3 && { statusId: done, completedAt: ago((i % 6) * HOUR + HOUR) }),
+      });
+      assign(id, who);
+    }
+
+    const everyone = (await client.get<DashboardDTO>(`/api/dashboard?today=${TODAY}`)).body;
+    const totals = { overdue: 0, dueToday: 0, dueSoon: 0, inProgress: 0, recentlyClosed: 0 };
+    const ids = (tasks: TaskDTO[]) => tasks.map((t) => t.id);
+    for (const set of [[me], [me, null], [null], [bob.user.id]] as Array<Array<number | null>>) {
+      const param = set.map((id) => (id === null ? 'none' : String(id))).join(',');
+      const res = await client.get<DashboardDTO>(`/api/dashboard?today=${TODAY}&assignees=${param}`);
+      expect(res.status, param).toBe(200);
+      const dash = res.body;
+      for (const section of SECTIONS) {
+        const q = await client.post<TaskQueryResult>('/api/tasks/query', dashboardSectionQuery(section, TODAY, LIMITS.queryLimitMax, set));
+        const all = [...q.body.tasks].sort(compareDashboardTasks(section));
+        expect(q.body.total, `${param} ${section}`).toBe(dash.counts[section]);
+        expect(ids(all.slice(0, dash[section].length)), `${param} ${section}`).toEqual(ids(dash[section]));
+        for (const t of dash[section]) expect(set, `${param} ${section}`).toContain(t.assigneeId);
+        if (set.length === 1) totals[section] += dash.counts[section];
+      }
+    }
+    // Every task here belongs to me, Bob or nobody, so the three single-assignee dashboards add up to everyone's.
+    for (const section of SECTIONS) expect(totals[section], section).toBe(everyone.counts[section]);
+    expect(everyone.counts.overdue).toBeGreaterThan(0);
+    expect((await client.get(`/api/dashboard?today=${TODAY}&assignees=bob`)).status).toBe(400);
+  });
+});

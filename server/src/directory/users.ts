@@ -91,9 +91,11 @@ export function readPreferences(row: Pick<UserRow, 'preferences'>): UserPreferen
   const shape = userPreferencesSchema.shape;
   const weekStartsOn = shape.weekStartsOn.safeParse(stored.weekStartsOn);
   const homePage = shape.homePage.safeParse(stored.homePage);
+  const dashboardScope = shape.dashboardScope.safeParse(stored.dashboardScope);
   return {
     weekStartsOn: weekStartsOn.success ? weekStartsOn.data : DEFAULT_PREFERENCES.weekStartsOn,
     homePage: homePage.success ? homePage.data : DEFAULT_PREFERENCES.homePage,
+    dashboardScope: dashboardScope.success ? dashboardScope.data : DEFAULT_PREFERENCES.dashboardScope,
   };
 }
 

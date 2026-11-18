@@ -88,7 +88,7 @@ describe('space inputs', () => {
 
 describe('settings split', () => {
   it('Settings is SpaceSettings plus UserPreferences, with the same defaults as before', () => {
-    expect(DEFAULT_SETTINGS).toEqual({ weekStartsOn: 1, estimateUnit: 'points', defaultBoardId: null, homePage: 'dashboard' });
+    expect(DEFAULT_SETTINGS).toEqual({ weekStartsOn: 1, estimateUnit: 'points', defaultBoardId: null, homePage: 'dashboard', dashboardScope: 'everyone' });
     expect({ ...DEFAULT_SPACE_SETTINGS, ...DEFAULT_PREFERENCES }).toEqual(DEFAULT_SETTINGS);
     expect(Object.keys(settingsSchema.shape).sort()).toEqual(
       [...Object.keys(spaceSettingsSchema.shape), ...Object.keys(userPreferencesSchema.shape)].sort(),
