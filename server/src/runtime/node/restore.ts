@@ -46,7 +46,6 @@ import { isSpaceId } from '../../core/ids';
 import { APP_VERSION } from '../../core/version';
 import { snapshotStamp } from '../../db/snapshots';
 import {
-  BackupError,
   extractBackupSet,
   inspectDatabase,
   openBackupSet,

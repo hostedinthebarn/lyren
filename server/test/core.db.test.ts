@@ -209,6 +209,7 @@ describe('statements and parameters', () => {
     expect(() => values('SELECT ?')).toThrow('takes an array');
     expect(() => values('SELECT ?', { a: 1 })).toThrow('takes an array');
     // A hole is not undefined: a DO would bind it as NULL, node:sqlite refuse it.
+    // eslint-disable-next-line no-sparse-arrays -- the hole is the missing parameter under test
     expect(() => values('SELECT ?, ?', [, 1])).toThrow('SQL parameter ?1 missing');
   });
 

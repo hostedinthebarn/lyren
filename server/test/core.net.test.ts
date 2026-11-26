@@ -3,7 +3,7 @@
 
 import net from 'node:net';
 import { describe, expect, it } from 'vitest';
-import { isIPv4, isIPv6, limiterKey, netKey } from '../src/core/net';
+import { isIPv4, isIPv6, netKey } from '../src/core/net';
 
 describe('isIPv4 and isIPv6', () => {
   it('decide as node:net does, on known cases and on random strings of address characters', () => {

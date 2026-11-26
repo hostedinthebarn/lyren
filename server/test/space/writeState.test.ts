@@ -8,7 +8,6 @@ import { heldBody as heldJson, heldBytes } from '../support/heldBody';
 import { createSpaceHarness, OTHER_SPACE_ID, OWNER_ID } from '../support/spaceHarness';
 
 const DAY_MS = 86_400_000;
-const HOUR_MS = 3_600_000;
 
 /** An archive of the harness's space mapped back to its owner (OWNER_ID). */
 const OWN_MAPPING = { mapping: [{ archiveId: OWNER_ID, target: { kind: 'user', userId: OWNER_ID } }] };

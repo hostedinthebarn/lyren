@@ -78,7 +78,7 @@ export async function loadAppConfigParser({ root, resolveEsbuild = wranglerEsbui
       supported: { 'dynamic-import': false },
     });
   } catch (err) {
-    throw new Error(`the app's configuration parser (server/src/core/config.ts) does not build: ${err.message}`);
+    throw new Error(`the app's configuration parser (server/src/core/config.ts) does not build: ${err.message}`, { cause: err });
   }
   const why = result.outputFiles.length === 1 ? impurity(result) : `is ${result.outputFiles.length} files`;
   if (why !== null) {

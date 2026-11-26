@@ -27,7 +27,8 @@
     "check": "npm run typecheck && npm run test && npm run build",
     "package:win": "node scripts/package.mjs --target win-x64",
     "package:linux": "node scripts/package.mjs --target linux-x64",
-    "package:node": "node scripts/pack-node.mjs"
+    "package:node": "node scripts/pack-node.mjs",
+    "lint": "npm run typecheck && eslint . --max-warnings 0"
   },
   "cloudflare": {
     "bindings": {
@@ -39,17 +40,21 @@
   "devDependencies": {
     "@cloudflare/vitest-plugin": "1.5.0",
     "@cloudflare/workers-types": "5.20261102.1",
+    "@eslint/js": "10.0.1",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.19.0",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
     "esbuild": "^0.25.12",
+    "eslint": "10.15.0",
+    "globals": "17.14.0",
     "postject": "1.0.0-alpha.6",
     "resedit": "3.1.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "~5.9",
+    "typescript-eslint": "8.74.0",
     "vite": "^7.3.7",
     "vitest": "^4.1.12",
     "wrangler": "4.156.2"
