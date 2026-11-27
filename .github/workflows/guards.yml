@@ -1,0 +1,147 @@
+# Layer 1 guards (GEN-233), copied from cookoffchamps (GEN-314). No model, no secrets, no quota. A second,
+# independent check beside deploy.yml and deploy-cloudflare.yml: it stops a merge, it doesn't deploy.
+#
+# A PR must not rewrite or outrun the checker that judges it:
+# - every job copies the guard scripts and allowlist from the BASE branch into a fresh temp folder and runs
+#   them from there (on the PR that first adds them there is no base copy, so that PR's own are used);
+# - the payload is built in one job (which runs the PR's code: npm ci, the build) and validated in another
+#   that runs none of it, so a build step can't tamper with the validators.
+# Actions pinned to the same SHAs as cookoffchamps' guards.yml.
+name: Guards
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 6 * * 1'   # weekly: a new advisory should show up on main, not on someone's PR
+permissions:
+  contents: read
+concurrency:
+  group: guards-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  PAYLOAD_DIR: dist/web          # wrangler.jsonc assets.directory (the Worker's own code is bundled, not served)
+  BUILD_CMD: npm run build:web   # the web client, as the deploy job builds it
+  LINT_SCRIPT: lint              # typecheck, then ESLint with zero warnings (package.json)
+  # What dist/web holds today (2026-11-26); never wider than the web-asset rule in the global deploy rules.
+  ALLOWED_EXT: 'html|css|js|map|svg|png|webmanifest|txt'
+
+jobs:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Take the guards from the base branch, into a fresh folder
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          G: ${{ runner.temp }}/guards
+        run: |
+          mkdir -p "$G"
+          for f in scripts/ci/secret-scan.sh scripts/ci/check-payload.sh .ci/secret-scan-allow.tsv; do
+            if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA:$f" 2>/dev/null; then git show "$BASE_SHA:$f" > "$G/${f##*/}"
+            else git show "HEAD:$f" > "$G/${f##*/}"; fi
+          done
+      - name: Scan lines added by this change
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          G: ${{ runner.temp }}/guards
+        run: |
+          if [ "$EVENT" = pull_request ]; then base=$PR_BASE; elif [ "$EVENT" = push ]; then base=$PUSH_BEFORE; else base=''; fi
+          # new branch, schedule or unknown before-commit: scan from the empty tree, i.e. the whole repo
+          if [ -z "$base" ] || [ "$base" = 0000000000000000000000000000000000000000 ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base=4b825dc642cb6eb9a060e54bf8d69288fbee4904
+          fi
+          SECRET_SCAN_ALLOW="$G/secret-scan-allow.tsv" bash "$G/secret-scan.sh" diff "$base"
+
+  payload-build:
+    name: Build payload
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: ${{ env.BUILD_CMD }}
+      # A tar keeps each entry's type. upload-artifact on its own would copy a symlink's target as a plain
+      # file and drop a broken one, so the payload check's symlink rule could never fire.
+      - name: Pack the payload as built
+        run: tar -cf "$RUNNER_TEMP/payload.tar" "$PAYLOAD_DIR"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: payload
+          path: ${{ runner.temp }}/payload.tar
+          if-no-files-found: error
+          retention-days: 3
+
+  deploy-payload:
+    name: Deploy payload
+    needs: payload-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      # Only git objects are read from this checkout; nothing from the PR is executed in this job.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { fetch-depth: 0, persist-credentials: false }
+      - name: Take the guards from the base branch, into a fresh folder
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          G: ${{ runner.temp }}/guards
+        run: |
+          mkdir -p "$G"
+          for f in scripts/ci/secret-scan.sh scripts/ci/check-payload.sh .ci/secret-scan-allow.tsv; do
+            if [ -n "$BASE_SHA" ] && git cat-file -e "$BASE_SHA:$f" 2>/dev/null; then git show "$BASE_SHA:$f" > "$G/${f##*/}"
+            else git show "HEAD:$f" > "$G/${f##*/}"; fi
+          done
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with: { name: payload, path: '${{ runner.temp }}/a' }
+      - name: Reject links and stray paths, then unpack
+        env: { T: '${{ runner.temp }}/a/payload.tar', D: '${{ runner.temp }}/p' }
+        run: |
+          # Only regular files and directories, and only under the payload directory, before anything is extracted.
+          bad=$(tar -tvf "$T" | cut -c1 | grep -cv '^[-d]$' || true)
+          [ "$bad" = 0 ] || { echo "::error::payload holds $bad link or special entries (symlink, hard link, device)"; exit 1; }
+          stray=$(tar -tf "$T" | grep -cvE "^${PAYLOAD_DIR}(/|$)" || true)
+          dots=$(tar -tf "$T" | grep -cE '(^|/)\.\.(/|$)' || true)
+          [ "$stray" = 0 ] && [ "$dots" = 0 ] || { echo "::error::payload has entries outside $PAYLOAD_DIR/"; exit 1; }
+          mkdir -p "$D" && tar -xf "$T" -C "$D" --no-same-owner --no-same-permissions
+      - name: File-type allowlist on the exact payload
+        working-directory: ${{ runner.temp }}/p
+        env: { G: '${{ runner.temp }}/guards' }
+        run: bash "$G/check-payload.sh" "$PAYLOAD_DIR"
+      - name: Secret scan on the exact payload
+        working-directory: ${{ runner.temp }}/p
+        env: { G: '${{ runner.temp }}/guards' }
+        run: SECRET_SCAN_ALLOW="$G/secret-scan-allow.tsv" bash "$G/secret-scan.sh" dir "$PAYLOAD_DIR"
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version-file: .nvmrc }
+      - run: npm audit --audit-level=high   # reads the lockfile, no npm ci. Covers dev deps too.
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with: { persist-credentials: false }
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with: { node-version-file: .nvmrc, cache: npm }
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run the repo's own lint script (fails if it doesn't exist)
+        run: |
+          node -e 'const s=require("./package.json").scripts||{}; if(!s[process.env.LINT_SCRIPT]){console.error("package.json has no script: "+process.env.LINT_SCRIPT);process.exit(1)}'
+          npm run "$LINT_SCRIPT"
