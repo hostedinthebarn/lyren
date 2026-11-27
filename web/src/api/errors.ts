@@ -56,7 +56,7 @@ function isErrorBody(data: unknown): data is ApiErrorBody {
  * Cloudflare's 1027 or 1015 page, a 503 while the server restarts).
  */
 export function errorFromResponse(status: number, text: string): ApiError {
-  let data: unknown = null;
+  let data: unknown;
   try {
     data = text ? JSON.parse(text) : null;
   } catch {

@@ -266,7 +266,7 @@ async function main() {
       out = signExecutable({ template: signTemplate, file: outFile, unsigned: out, blob, fuse: SENTINEL_FUSE });
     } catch (err) {
       // signExecutable has put the unsigned exe back.
-      throw new Error(`${err.message}\n${outFile} is NOT signed (the unsigned exe is left there), and no .sha256 file was written.`);
+      throw new Error(`${err.message}\n${outFile} is NOT signed (the unsigned exe is left there), and no .sha256 file was written.`, { cause: err });
     }
     signed = true;
   }
@@ -278,7 +278,7 @@ async function main() {
     try {
       machine = peMachine(out);
     } catch (err) {
-      throw new Error(`${fileName} is not a valid Windows program (${err.message}). No .sha256 file was written.`);
+      throw new Error(`${fileName} is not a valid Windows program (${err.message}). No .sha256 file was written.`, { cause: err });
     }
     if (machine !== PE_MACHINES[opts.target]) {
       throw new Error(`${fileName} is not a ${opts.target} program (PE machine 0x${machine.toString(16)}). No .sha256 file was written.`);

@@ -104,7 +104,7 @@ export function MarkdownEditor({
     const expected = applyTextEdit(el.value, edit);
     el.focus();
     el.setSelectionRange(edit.from, edit.to);
-    let ok = false;
+    let ok: boolean;
     try {
       if (edit.insert !== '') ok = document.execCommand('insertText', false, edit.insert);
       else ok = edit.from === edit.to || document.execCommand('delete');

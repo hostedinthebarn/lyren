@@ -16,11 +16,11 @@
 
 import { LIMITS } from './constants';
 
-const LOCAL_ATOM = /^[A-Za-z0-9!#$%&'*+\/=?^_`{|}~-]+(\.[A-Za-z0-9!#$%&'*+\/=?^_`{|}~-]+)*$/;
+const LOCAL_ATOM = /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*$/;
 /** At least two labels of 1-63 characters, and an alphabetic or punycode TLD. */
 const ASCII_DOMAIN = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+(xn--[a-z0-9-]{1,59}|[a-z]{2,63})$/;
 /** The URL parser would percent-decode or split at these, so they are refused before it runs. */
-const DOMAIN_SPECIALS = /[%\/\\?#:@\s]/;
+const DOMAIN_SPECIALS = /[%/\\?#:@\s]/;
 
 export type NormalizedEmail = { ok: true; address: string; key: string } | { ok: false; reason: string };
 

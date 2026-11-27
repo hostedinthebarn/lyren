@@ -35,8 +35,10 @@ export function parseCommandTemplate(text) {
     try {
       words = JSON.parse(value);
     } catch (err) {
-      // Not err.message: V8 quotes the text around the mistake, which may be part of a password.
+      // Not err.message: V8 quotes the text around the mistake, which may be part of a password. For the same
+      // reason no `cause`: Node prints an uncaught error's cause, message and all.
       const at = /\bposition (\d+)/.exec(String(err?.message ?? ''));
+      // eslint-disable-next-line preserve-caught-error -- see above: the cause would print the password
       throw new Error(
         `LYREN_SIGN_CMD starts with "[" but is not valid JSON${at ? ` (the mistake is near character ${Number(at[1]) + 1})` : ''}: ` +
           'check the double quotes, the commas between the strings and the doubled backslashes',
@@ -119,7 +121,7 @@ export function verifySignedImage(signed, unsigned, { blob, fuse } = {}) {
   try {
     table = certificateTable(signed);
   } catch (err) {
-    throw new Error(`The signed file is no longer a valid Windows program: ${err.message}`);
+    throw new Error(`The signed file is no longer a valid Windows program: ${err.message}`, { cause: err });
   }
   if (!table) throw new Error('The signing command left the exe without an Authenticode signature (no certificate table)');
   const { offset, size } = table;

@@ -7,7 +7,7 @@ import { spaceArchiveSchema } from '@shared/archive';
 import { CSRF_HEADER } from '@shared/constants';
 import { IMPORT_INT_MAX, type ExportInput } from '@shared/export';
 import { DEFAULT_PREFERENCES } from '@shared/schemas';
-import type { BoardDTO, SpaceArchiveDTO, StatusDTO, TagDTO } from '@shared/types';
+import type { BoardDTO, StatusDTO, TagDTO } from '@shared/types';
 import { extractBackupSet, openBackupSet } from '../src/runtime/node/backupSet';
 import { getBoard } from '../src/services/entities';
 import { createTestContext, type TestClient } from './helpers';

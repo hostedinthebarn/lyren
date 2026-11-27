@@ -29,7 +29,7 @@ const COMMENTS = 300;
 
 let owner: WorkerClient;
 let spaceId: string;
-let projectIds: number[] = [];
+const projectIds: number[] = [];
 let created: number[] = [];
 let tasksOf: Map<number, number>;
 let statusIds: number[] = [];

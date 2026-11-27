@@ -5,7 +5,9 @@
   try {
     var v = localStorage.getItem('lyren.theme');
     if (v === 'light' || v === 'dark' || v === 'system') pref = v;
-  } catch (e) {}
+  } catch {
+    // Storage blocked (private mode, policy): keep the default theme.
+  }
   var dark = pref === 'dark' || (pref === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
   if (dark) document.documentElement.classList.add('dark');
 })();

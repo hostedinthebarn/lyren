@@ -75,7 +75,7 @@ export function extractFromTarGz(archive, member) {
     const size = sizeField[0] & 0x80 ? Number(sizeField.readBigUInt64BE(4)) : parseInt(str(124, 12).trim() || '0', 8);
     const type = String.fromCharCode(header[156] || 0x30);
     const prefix = str(345, 155);
-    let name = longName ?? (prefix ? `${prefix}/${str(0, 100)}` : str(0, 100));
+    const name = longName ?? (prefix ? `${prefix}/${str(0, 100)}` : str(0, 100));
     longName = null;
     const dataStart = off + 512;
     const next = dataStart + Math.ceil(size / 512) * 512;
@@ -161,6 +161,7 @@ async function expectedSha256({ version, name, dir, env, log, online }) {
       throw new Error(
         `Could not get ${url} to check the Node.js binary (${err.message}). Without access to nodejs.org, ` +
           'give a SHASUMS256.txt of that release with LYREN_NODE_SHASUMS=<file>.',
+        { cause: err },
       );
     }
     fs.writeFileSync(cached, text);

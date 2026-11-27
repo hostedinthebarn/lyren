@@ -394,7 +394,7 @@ function passkeyConfig(vars: ConfigVars, url: URL | null, rpName: string): Passk
     let candidate = '';
     try {
       // The same IDNA conversion as PUBLIC_URL's host; characters the URL parser treats specially are refused.
-      if (!/[%\/\\?#:@\s\[\]]/.test(rpIdVar)) candidate = new URL(`http://${rpIdVar}/`).hostname;
+      if (!/[%/\\?#:@\s[\]]/.test(rpIdVar)) candidate = new URL(`http://${rpIdVar}/`).hostname;
     } catch {
       // reported below
     }

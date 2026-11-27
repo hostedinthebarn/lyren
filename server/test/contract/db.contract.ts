@@ -140,6 +140,7 @@ export function defineDbContract(kind: Db['kind'], withDb: WithDb, options: DbCo
             [() => db.get('SELECT ? AS a'), 'takes an array of 1 value(s)'],
             [() => db.get('SELECT ? AS a', { a: 1 }), 'takes an array of 1 value(s)'],
             // A hole is not undefined: node:sqlite refuses it, a DO binds NULL.
+            // eslint-disable-next-line no-sparse-arrays -- the hole is the missing parameter under test
             [() => db.get('SELECT ? AS a, ? AS b', [, 1]), 'SQL parameter ?1 missing'],
             [() => db.get('SELECT ? AS a, ? AS b', new Array(2)), 'SQL parameter ?1 missing'],
             [() => db.get('SELECT :a AS a, :b AS b', ['x', 'y']), 'SQL with :name parameters takes an object, not an array'],
