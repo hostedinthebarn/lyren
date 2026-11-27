@@ -97,7 +97,7 @@ const EXPECTED: Record<string, GateRule> = {
   'POST /api/prioritize/sets/:id/choices': edit(),
   'DELETE /api/prioritize/sets/:id/choices/:a/:b': remove(),
   'GET /api/prioritize/sets/:id/result': view(),
-  'POST /api/prioritize/sets/:id/confirm': edit(),
+  'POST /api/prioritize/sets/:id/confirm': edit('admin'),
   'GET /api/dashboard': view(),
   'GET /api/search': view(),
 };

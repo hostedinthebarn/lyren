@@ -82,6 +82,38 @@ describe('/api/prioritize', () => {
     void owner;
   });
 
+  it('a member can answer but only an admin can confirm', async () => {
+    const { ctx, owner, ids, set } = await setupSet();
+    const member = await ctx.addUser({ email: 'member@example.com', role: 'member' });
+    expect((await member.client.post(`/api/prioritize/sets/${set.id}/choices`, { a: ids[0], b: ids[1], winner: ids[0] })).status).toBe(200);
+    expect((await member.client.post(`/api/prioritize/sets/${set.id}/confirm`, { allowIncomplete: true })).status).toBe(403);
+    expect((await owner.client.post(`/api/prioritize/sets/${set.id}/confirm`, { allowIncomplete: true })).status).toBe(200);
+  });
+
+  it('import rejects a task pointing at a set that is not in the file, and a comparison about a task outside its set', async () => {
+    const { owner, ids, set } = await setupSet();
+    await answerAll(owner.client, set.id, ids);
+    expect((await owner.client.post(`/api/prioritize/sets/${set.id}/confirm`, {})).status).toBe(200);
+    const archive = (await downloadArchive(owner.client)).archive as SpaceArchiveDTO;
+    const mapping = { mapping: archive.users.map((u) => ({ archiveId: u.id, target: { kind: 'user' as const, userId: owner.user.id } })) };
+
+    const noBlock = structuredClone(archive);
+    delete noBlock.prioritization;
+    const r1 = await replaceImport(owner.client, noBlock, { mapping });
+    expect(r1.status).toBe(400);
+    expect(JSON.stringify(r1.body)).toContain('prioritySetId');
+
+    const outsider = structuredClone(archive);
+    const other = outsider.tasks.find((t) => !ids.includes(t.id))!;
+    const c = outsider.prioritization!.comparisons[0]!;
+    const lo = Math.min(c.taskLo, other.id);
+    const hi = Math.max(c.taskLo, other.id);
+    outsider.prioritization!.comparisons.push({ ...c, id: 99999, taskLo: lo, taskHi: hi, winner: null });
+    const r2 = await replaceImport(owner.client, outsider, { mapping });
+    expect(r2.status).toBe(400);
+    expect(JSON.stringify(r2.body)).toContain(`task ${other.id} is not in set`);
+  });
+
   it('a deleted task stays in the set as deleted', async () => {
     const { owner, ids, set } = await setupSet();
     await answerAll(owner.client, set.id, ids);

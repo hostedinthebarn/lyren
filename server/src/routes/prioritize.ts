@@ -57,7 +57,7 @@ export function prioritizeRoutes({ db }: Deps) {
   r.post('/sets/:id/confirm', async (c) => {
     const id = readId(c);
     const input = await readJson(c, prioritizeConfirmInput);
-    return c.json<PrioritizeResultDTO>(confirmResult(db, id, input));
+    return c.json<PrioritizeResultDTO>(confirmResult(db, { userId: currentUser(c).id }, id, input));
   });
 
   return r;

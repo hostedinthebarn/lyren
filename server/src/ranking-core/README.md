@@ -3,22 +3,21 @@
 Pure TypeScript, no dependencies, no Lyren imports. Given a list of items and the answers so far
 (`{ a, b, winner | null }`), it picks the next pair to ask and ranks the items.
 
-## Provenance: READ THIS BEFORE TRUSTING IT
+## Provenance
 
-This is meant to be a copy of `packages/ranking-core` from `hostedinthebarn/which-first`
-(merged in PR #2, 2026-11-23). **The Worker that wrote this folder had no access to GitHub, so it is NOT a
-verbatim copy.** It is a re-implementation of the behaviour described in the HL-4 comments:
+`engine.ts` is a **verbatim copy** of `packages/ranking-core/src/engine.ts` from
+`hostedinthebarn/which-first`, commit **`c2b24fb`** (main, PR #2 "HL-4 ranking engine", 2026-11-23).
+Its tests are in `server/test/ranking-core/` (`engine.test.ts`, `harness.ts`, `pyrandom.ts`), copied from
+the same commit with only their import paths changed.
 
-- Bradley-Terry log-strengths by MM iteration with a small virtual-opponent prior; a tie counts half a win.
-- A repeated pair overrides the earlier answer (the undo).
-- `nextPair` skips any pair whose order already follows from chained answers, then picks the open pair
-  with the closest strengths, and returns `null` when the order is settled.
-- `rank` orders by chained-answer order first, strength second, and gives a 0-100 display score.
+**Don't edit `engine.ts` here.** Fix it in which-first and copy it across again, updating the commit above.
+Lyren's own needs are in `index.ts`, a thin adapter:
 
-Follow-up (Lyren task for Primary): overwrite `index.ts` and `engine.test.ts` here with the real files and
-record the which-first commit hash below. The service layer (`server/src/services/prioritize.ts`) only uses
-`nextPair` and `rank`, through the `Answer` shape, so a swap should be a small adapter change at most.
+- It drops answers about unknown items, self-pairs and invalid winners before they reach the engine.
+- `nextPair(items, answers, askAbout)` can leave items out of the questions. A set's deleted tasks stay
+  in the result but aren't asked about.
+- `rank` returns one row per item: position, score (0-100) and win, loss and tie counts.
 
-Copied from which-first commit: **none yet (re-implementation)**.
+The service layer (`server/src/services/prioritize.ts`) uses only the adapter.
 
-Packaging as a shared package is HL-11, not this folder's job.
+Packaging this as a shared package instead of a copy is HL-11.

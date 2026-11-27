@@ -180,6 +180,8 @@ export function changePhrase(change: FieldChange, lookups: ActivityTextLookups =
       return valueChange('due date', change, (v) => formatDate(String(v)));
     case 'estimate':
       return valueChange('estimate', change, (v) => formatEstimate(Number(v), unit));
+    case 'priorityRank':
+      return valueChange('priority rank', change, (v) => `#${v}`);
     case 'tags':
       return tagsChange(change);
     case 'blockedBy':

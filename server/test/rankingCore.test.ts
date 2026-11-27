@@ -110,10 +110,13 @@ describe('ranking-core', () => {
     expect(rank([1, 2, 3], answers).map((r) => r.id)[0]).toBe(2);
   });
 
-  it('gives scores from 0 to 100', () => {
+  it('gives scores between 0 and 100, falling with position (the engine maps strength through a logistic)', () => {
     const { items, answers } = run([1, 2, 3, 4]);
     const r = rank(items, answers);
-    expect(r[0]!.score).toBe(100);
-    expect(r[3]!.score).toBe(0);
+    for (const x of r) {
+      expect(x.score).toBeGreaterThan(0);
+      expect(x.score).toBeLessThan(100);
+    }
+    for (let i = 1; i < r.length; i++) expect(r[i]!.score).toBeLessThan(r[i - 1]!.score);
   });
 });

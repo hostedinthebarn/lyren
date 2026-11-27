@@ -525,6 +525,33 @@ is the attribution now; a placeholder's row goes); `POST …/people/me/disown` (
 attributed to the caller to the space's placeholder "Unknown (imported)" (made by the first disown, shared by the
 later ones). Neither records activity.
 
+### 5.12 Pairwise prioritization (HL-5, space migration 6)
+A **set** (`prioritization_sets`) is the tasks to rank: the open, unarchived tasks of a project or an epic, or an
+explicit list, 2 to `PRIORITIZE_MAX_ITEMS` (60; more is a 400, never a quiet subset). Each item
+(`prioritization_items`) keeps the task's ref and title as they were when the set was made. A **comparison**
+(`prioritization_comparisons`) is one row per unordered pair of a set (`task_lo < task_hi`), with `winner` set to one of
+the two tasks, or NULL for a tie. Answering a pair again replaces the earlier answer; deleting it is the undo.
+- **No foreign key to `tasks`.** Archiving a task (a flag) or hard-deleting it never touches a set. A deleted task
+  stays in the result marked `deleted`, with its snapshot ref and title, and is no longer asked about.
+- **The engine** is `server/src/ranking-core/`: `engine.ts` is a verbatim copy of which-first's `ranking-core`
+  (commit in its README), behind a small adapter in `index.ts`. It's pure: services pass it the items and answers and
+  store what it returns.
+- **Confirm** writes the result to `tasks.priority_rank` (1 = most important, numbered 1..n over the tasks that
+  still exist) and `tasks.priority_set_id`. It **never** touches `rank` (the board order). Tasks outside the set
+  keep what they had (the latest confirmed set wins per task). Confirming with open pairs is a **409** unless the
+  body has `allowIncomplete: true`. Each task whose priority rank changes gets a `task.updated` activity entry
+  (`changes: [{ field: 'priorityRank', from, to }]`, plus `prioritySetId` and `prioritySetName`) and a new
+  `updated_at`.
+- **Permissions:** viewers read; members create sets, answer and undo; **only admins confirm**.
+- **Tasks:** `priorityRank` and `prioritySetId` are on `TaskDTO`. `TaskFilter.hasPriorityRank` filters, and the
+  `priorityRank` sort puts nulls last.
+- **Archive (v2, no version bump):** tasks carry optional `priorityRank` and `prioritySetId`, and an optional top-level
+  `prioritization` block holds `{ sets, items, comparisons }`. Validation checks the block's own references, that a
+  comparison's tasks are items of its set, and that a task's `prioritySetId` names a set in the file (an absent block
+  counts as empty). Who created a set or answered a pair isn't carried.
+- **Compatibility:** migration 6 is additive (`compatibleFrom: 1`). An older build never reads the new tables or
+  columns. Roll back *before* an import, not after: an older build's import replaces the tasks but leaves the sets.
+
 ### 5.11 Board references
 Board configs store entity ids in JSON (no FKs). `services/boardRefs.ts#rewriteBoardRefs(db, kind, fromId,
 toId|null)` applies `remapBoardConfigIds` (shared/src/board.ts) to every board and saves changed configs. Call it
@@ -659,6 +686,9 @@ only, need no `X-Lyren-Request` header, and get 401 on every account, space-list
 | POST `/api/data/import/commit?mode=new\|replace` | multipart `file`, `mapping` (JSON `ImportMappingInput`) | `ImportResultDTO` (§5.10; 409 `quota_exceeded` over `IMPORT_MAX_ROW_WRITES`, 429 past the day's import budget) |
 | POST `/api/people/:personId/reassign` · POST `/api/people/me/disown` | `PeopleReassignInput` · – | `PeopleReassignedDTO` (admins and owners) · `PeopleDisownedDTO` (anyone) |
 | GET `/api/dashboard?today=&weekStartsOn=&assignees=` | – | `DashboardDTO` (lists capped at 50 / 20; `counts` = uncapped totals per list, `inProgressProjects` = distinct projects with started tasks; `slipped` = open slipped tasks; `worklog` = the viewer's own time). `assignees` (LYR-17): comma-separated person ids, `none` = unassigned; narrows every list, count and `slipped` to those assignees' tasks (`assigneeIds` filter semantics); absent = everyone; `recentActivity` and `worklog` are unchanged |
+| GET/POST `/api/prioritize/sets` · GET `/api/prioritize/sets/:id` | `PrioritizeSetCreateInput` | `PrioritizeSetDTO` (+ `items` for one set; §5.12) |
+| GET `/api/prioritize/sets/:id/next` · GET/POST `/api/prioritize/sets/:id/choices` · DELETE `/api/prioritize/sets/:id/choices/:a/:b` | – · `PrioritizeChoiceInput` | `PrioritizeNextDTO` · `PrioritizeChoiceDTO` (DELETE = undo, 404 if not answered) |
+| GET `/api/prioritize/sets/:id/result` · POST `/api/prioritize/sets/:id/confirm` | – · `PrioritizeConfirmInput` | `PrioritizeResultDTO` (confirm: admins only, 409 with open pairs unless `allowIncomplete`; §5.12) |
 | GET `/api/search?q&limit` | `SearchQueryInput` | `SearchResultDTO` (tasks of every project, archived tasks included and ranked after live ones at equal relevance) |
 
 The instance backup is the directory's `GET /api/admin/backup` (design §9.5); the space app has no backup route.

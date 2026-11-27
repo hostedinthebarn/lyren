@@ -104,9 +104,9 @@ export function definePrioritizeContract(adapter: string, withSpaceDb: WithSpace
         const { db, ids } = setup(space, 4);
         const before = db.all<{ id: number; rank: string }>('SELECT id, rank FROM tasks ORDER BY id');
         const set = createSet(db, space, { scope: { type: 'tasks', taskIds: ids } });
-        expect(status(() => confirmResult(db, set.id, {}))).toBe(409);
+        expect(status(() => confirmResult(db, space, set.id, {}))).toBe(409);
         answerAll(db, space.userId, set.id, [ids[2]!, ids[0]!, ids[3]!, ids[1]!]);
-        const result = confirmResult(db, set.id, {});
+        const result = confirmResult(db, space, set.id, {});
         expect(result.set.confirmedAt).not.toBeNull();
         const rows = db.all<{ id: number; priority_rank: number; priority_set_id: number }>(
           'SELECT id, priority_rank, priority_set_id FROM tasks ORDER BY priority_rank',
@@ -115,6 +115,17 @@ export function definePrioritizeContract(adapter: string, withSpaceDb: WithSpace
         expect(rows.map((r) => r.priority_rank)).toEqual([1, 2, 3, 4]);
         expect(rows.every((r) => r.priority_set_id === set.id)).toBe(true);
         expect(db.all('SELECT id, rank FROM tasks ORDER BY id')).toEqual(before);
+        // Every task whose priority rank changed gets a task.updated entry, like any field edit.
+        const acts = db.all<{ task_id: number; data: string }>(
+          "SELECT task_id, data FROM activity WHERE action = 'task.updated' ORDER BY task_id",
+        );
+        expect(acts.map((a) => a.task_id)).toEqual([...ids].sort((x, y) => x - y));
+        const first = JSON.parse(acts.find((a) => a.task_id === ids[2])!.data);
+        expect(first.changes).toEqual([{ field: 'priorityRank', from: null, to: 1 }]);
+        expect(first.prioritySetId).toBe(set.id);
+        // Confirming the same result again changes nothing, so it records nothing.
+        confirmResult(db, space, set.id, {});
+        expect(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM activity WHERE action = 'task.updated'")!.n).toBe(4);
       });
     });
 
@@ -123,10 +134,10 @@ export function definePrioritizeContract(adapter: string, withSpaceDb: WithSpace
         const { db, ids } = setup(space, 3);
         const s1 = createSet(db, space, { scope: { type: 'tasks', taskIds: ids } });
         answerAll(db, space.userId, s1.id, [ids[0]!, ids[1]!, ids[2]!]);
-        confirmResult(db, s1.id, {});
+        confirmResult(db, space, s1.id, {});
         const s2 = createSet(db, space, { scope: { type: 'tasks', taskIds: ids } });
         answerAll(db, space.userId, s2.id, [ids[2]!, ids[1]!, ids[0]!]);
-        confirmResult(db, s2.id, {});
+        confirmResult(db, space, s2.id, {});
         const t = db.get<{ priority_rank: number; priority_set_id: number }>(
           'SELECT priority_rank, priority_set_id FROM tasks WHERE id = :id',
           { id: ids[2]! },
@@ -171,7 +182,7 @@ export function definePrioritizeContract(adapter: string, withSpaceDb: WithSpace
         expect(nextQuestion(db, set.id).done).toBe(true);
         expect(status(() => recordChoice(db, space, set.id, { a: gone, b: ids[0]!, winner: ids[0]! }))).toBe(409);
         // Confirming writes only the tasks that still exist.
-        confirmResult(db, set.id, {});
+        confirmResult(db, space, set.id, {});
         expect(db.get<{ n: number }>('SELECT COUNT(*) AS n FROM tasks WHERE priority_rank IS NOT NULL')!.n).toBe(2);
         // Renumbered 1..2 over the live tasks, no gap where the deleted one sat.
         expect(db.all('SELECT priority_rank FROM tasks ORDER BY priority_rank').map((r) => (r as { priority_rank: number }).priority_rank)).toEqual([1, 2]);

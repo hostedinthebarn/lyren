@@ -113,10 +113,9 @@ export function validateArchive(body: unknown): ImportArchive {
 /** The optional `prioritization` key: its shape, then that its rows agree with each other and the tasks' ranks. */
 function readPrioritization(value: unknown, archive: Pick<ImportArchive, 'tasks' | 'version'>): ArchivePrioritization {
   const none: ArchivePrioritization = { sets: [], items: [], comparisons: [] };
-  if (archive.version !== 2 || value === undefined || value === null) {
-    return none;
-  }
-  const parsed = archivePrioritizationSchema.safeParse(value);
+  if (archive.version !== 2) return none;
+  // An absent block is an empty one, and still checked: a task naming a prioritySetId needs that set.
+  const parsed = archivePrioritizationSchema.safeParse(value ?? none);
   if (!parsed.success) {
     const first = parsed.error.issues[0]!;
     throw badRequest(`Invalid export file (prioritization): ${first.path.join('.')}: ${first.message}`, [
@@ -148,6 +147,11 @@ function readPrioritization(value: unknown, archive: Pick<ImportArchive, 'tasks'
     if (!setIds.has(c.setId)) add(`comparisons.${i}.setId`, `Set ${c.setId} does not exist`);
     if (c.taskLo >= c.taskHi) add(`comparisons.${i}.taskLo`, `Comparison ${c.id}: taskLo must be below taskHi`);
     if (c.winner !== null && c.winner !== c.taskLo && c.winner !== c.taskHi) add(`comparisons.${i}.winner`, `Comparison ${c.id}: the winner is neither task`);
+    for (const t of [c.taskLo, c.taskHi]) {
+      if (setIds.has(c.setId) && !itemKeys.has(`${c.setId}:${t}`)) {
+        add(`comparisons.${i}`, `Comparison ${c.id}: task ${t} is not in set ${c.setId}`);
+      }
+    }
     const k = `${c.setId}:${c.taskLo}:${c.taskHi}`;
     if (pairs.has(k)) add(`comparisons.${i}.taskHi`, `Comparison ${c.id}: the pair is answered twice in set ${c.setId}`);
     pairs.add(k);

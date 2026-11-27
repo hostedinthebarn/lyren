@@ -21,6 +21,7 @@ import type {
 import type { Db } from '../db';
 import { badRequest, conflict, notFound } from '../http/errors';
 import { nextPair, rank, type Answer } from '../ranking-core';
+import { recordActivity, valueChange } from './activity';
 import { nowIso } from './sql';
 import { taskOpenSql } from './tasks';
 
@@ -261,9 +262,11 @@ export function getResult(db: Db, setId: number): PrioritizeResultDTO {
 /**
  * Confirm the result: write each existing task's place (1..n among the live tasks) to tasks.priority_rank and the set to
  * priority_set_id (the latest confirmed set wins; tasks outside this set keep what they had). `rank` is not
- * touched. Needs every question answered unless `allowIncomplete`. Returns the result as written.
+ * touched. Needs every question answered unless `allowIncomplete`. Admins only (the gate). Each task whose
+ * priority rank changes gets a `task.updated` activity entry and a new updated_at, like any field edit
+ * (Gary, 2026-11-27). Returns the result as written.
  */
-export function confirmResult(db: Db, setId: number, input: PrioritizeConfirmInput): PrioritizeResultDTO {
+export function confirmResult(db: Db, actor: { userId: number }, setId: number, input: PrioritizeConfirmInput): PrioritizeResultDTO {
   db.tx(() => {
     const result = getResult(db, setId);
     if (!result.done && !input.allowIncomplete) {
@@ -272,12 +275,38 @@ export function confirmResult(db: Db, setId: number, input: PrioritizeConfirmInp
     const now = nowIso();
     // Renumbered 1..n over the tasks that still exist, so a deleted task leaves no gap (Gary, 2026-11-27).
     const rows = result.items.filter((i) => !i.deleted).map((i, n) => ({ id: i.taskId, position: n + 1 }));
+    const before = new Map(
+      db
+        .all<{ id: number; project_id: number; title: string; priority_rank: number | null; ref: string }>(
+          `SELECT t.id, t.project_id, t.title, t.priority_rank,
+                  (SELECT key FROM projects WHERE id = t.project_id) || '-' || t.number AS ref
+             FROM tasks t WHERE t.id IN (SELECT json_extract(value, '$.id') FROM json_each(:rows))`,
+          { rows: JSON.stringify(rows) },
+        )
+        .map((t) => [t.id, t]),
+    );
     db.run(
       `UPDATE tasks SET priority_rank = (SELECT json_extract(value, '$.position') FROM json_each(:rows) WHERE json_extract(value, '$.id') = tasks.id),
                         priority_set_id = :setId, updated_at = :now
         WHERE id IN (SELECT json_extract(value, '$.id') FROM json_each(:rows))`,
       { rows: JSON.stringify(rows), setId, now },
     );
+    for (const { id, position } of rows) {
+      const t = before.get(id);
+      if (!t) continue;
+      const change = valueChange('priorityRank', t.priority_rank, position);
+      if (!change) continue;
+      recordActivity(db, {
+        userId: actor.userId,
+        projectId: t.project_id,
+        taskId: id,
+        entityType: 'task',
+        entityId: id,
+        action: 'task.updated',
+        data: { changes: [change], title: t.title, ref: t.ref, prioritySetId: setId, prioritySetName: result.set.name },
+        createdAt: now,
+      });
+    }
     db.run('UPDATE prioritization_sets SET confirmed_at = :now WHERE id = :setId', { setId, now });
   });
   return getResult(db, setId);
