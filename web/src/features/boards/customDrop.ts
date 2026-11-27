@@ -91,6 +91,8 @@ export function dropPatchWarnings(
     dueDate: patch.dueDate ?? null,
     estimate: null,
     rank: '',
+    priorityRank: null,
+    prioritySetId: null,
     completedAt: null,
     archivedAt: patch.archived ? '1970-01-01T00:00:00.000Z' : null,
     createdBy: null,

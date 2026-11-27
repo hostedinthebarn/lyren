@@ -47,6 +47,7 @@ export const SORT_FIELD_LABELS: Record<TaskSortField, string> = {
   number: 'Number',
   estimate: 'Estimate',
   status: 'Status',
+  priorityRank: 'Priority rank',
 };
 
 export const DEFAULT_TASK_LIST_SORT: TaskSort = { field: 'manual', dir: 'asc' };

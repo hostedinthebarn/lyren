@@ -287,6 +287,8 @@ function oldHydrateTasks(db: Db, rows: readonly TaskRow[]): TaskDTO[] {
     dueDate: r.due_date,
     estimate: r.estimate,
     rank: r.rank,
+    priorityRank: r.priority_rank,
+    prioritySetId: r.priority_set_id,
     completedAt: r.completed_at,
     archivedAt: r.archived_at,
     createdBy: r.created_by,

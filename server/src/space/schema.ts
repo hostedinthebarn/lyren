@@ -3,7 +3,8 @@
 // users mirror in place of the accounts (§3.5), fold columns for case-insensitive uniqueness and
 // search (§3.4), import provenance on comments, work logs and activity (§8.6), and _meta (§3.7);
 // migration 2 adds tasks.tag_ids, migration 3 tasks.comment_count and tasks.worklog_minutes, migration 4
-// task_links, migration 5 tasks.assignee_id and users.role. Every other
+// task_links, migration 5 tasks.assignee_id and users.role, migration 6 the pairwise-prioritization tables
+// and tasks.priority_rank / priority_set_id. Every other
 // table and column is exactly as in db/schema.ts V1, so the route and service SQL keeps working. Append new migrations to SPACE_MIGRATIONS and never edit
 // one that has shipped.
 //
@@ -319,12 +320,66 @@ CREATE INDEX tasks_assignee ON tasks(assignee_id);
 DELETE FROM _meta WHERE key = 'sync_version';
 `;
 
+/**
+ * Migration 6 (HL-5, pairwise prioritization): a set of tasks to rank (prioritization_sets), the tasks it holds
+ * (prioritization_items), the answers given (prioritization_comparisons), and the confirmed result on each task
+ * (tasks.priority_rank, tasks.priority_set_id, both nullable). `rank`, the board order, is never touched.
+ *
+ * Nothing here has a foreign key to tasks, on purpose: archiving a task is a flag and a hard delete must not take
+ * the history with it, so an item keeps the task's ref and title as they were when the set was made (a deleted
+ * task reads "HL-9 (deleted) was ranked #2"). The tables belong to one space like every other (each space has its
+ * own database), so there is no space column. A comparison is stored once per unordered pair (task_lo < task_hi),
+ * so answering a pair again replaces the earlier answer; winner is a task id, or NULL for a tie.
+ *
+ * Additive: an older build never reads the tables or the two columns (a task row it writes leaves them NULL), so
+ * this is compatible from 1. An older build's import replaces the tasks but would leave the sets: roll back
+ * before importing, not after.
+ */
+export const SPACE_V6 = /* sql */ `
+CREATE TABLE prioritization_sets (
+  id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  name         TEXT NOT NULL,
+  scope_type   TEXT NOT NULL CHECK (scope_type IN ('project', 'epic', 'tasks')),
+  scope_id     INTEGER,                               -- the project or epic the set was made from (no FK: it may go)
+  created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at   TEXT NOT NULL,
+  confirmed_at TEXT                                   -- when the result was last written to the tasks
+);
+
+CREATE TABLE prioritization_items (
+  set_id         INTEGER NOT NULL REFERENCES prioritization_sets(id) ON DELETE CASCADE,
+  task_id        INTEGER NOT NULL,                    -- NO foreign key to tasks (see above)
+  ref_snapshot   TEXT NOT NULL,
+  title_snapshot TEXT NOT NULL,
+  added_at       TEXT NOT NULL,
+  PRIMARY KEY (set_id, task_id)
+) WITHOUT ROWID;
+
+CREATE TABLE prioritization_comparisons (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  set_id      INTEGER NOT NULL REFERENCES prioritization_sets(id) ON DELETE CASCADE,
+  task_lo     INTEGER NOT NULL,
+  task_hi     INTEGER NOT NULL,
+  winner      INTEGER,                                -- task_lo, task_hi, or NULL for a tie
+  answered_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  answered_at TEXT NOT NULL,
+  UNIQUE (set_id, task_lo, task_hi),
+  CHECK (task_lo < task_hi),
+  CHECK (winner IS NULL OR winner = task_lo OR winner = task_hi)
+);
+
+ALTER TABLE tasks ADD COLUMN priority_rank INTEGER;     -- 1 = most important, from the last confirmed set
+ALTER TABLE tasks ADD COLUMN priority_set_id INTEGER;   -- that set (no FK, like the items)
+CREATE INDEX tasks_priority_rank ON tasks(priority_rank);
+`;
+
 const MIGRATIONS: ReadonlyArray<Migration> = [
   { up: (db) => db.exec(SPACE_V1) },
   { up: (db) => db.exec(SPACE_V2), compatibleFrom: 1 },
   { up: (db) => db.exec(SPACE_V3), compatibleFrom: 1 },
   { up: (db) => db.exec(SPACE_V4), compatibleFrom: 1 },
   { up: (db) => db.exec(SPACE_V5), compatibleFrom: 1 },
+  { up: (db) => db.exec(SPACE_V6), compatibleFrom: 1 },
 ];
 
 export const SPACE_MIGRATIONS: MigrationSet = { schema: 'space', migrations: MIGRATIONS };

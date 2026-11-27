@@ -110,6 +110,17 @@ export const GATE_RULES: Readonly<Record<string, GateRule>> = {
   'GET /api/worklogs': view(),
   'GET /api/activity': view(),
 
+  // Pairwise prioritization (HL-5): members answer; viewers only read. Confirming writes tasks.priority_rank.
+  'GET /api/prioritize/sets': view(),
+  'POST /api/prioritize/sets': edit(),
+  'GET /api/prioritize/sets/:id': view(),
+  'GET /api/prioritize/sets/:id/next': view(),
+  'GET /api/prioritize/sets/:id/choices': view(),
+  'POST /api/prioritize/sets/:id/choices': edit(),
+  'DELETE /api/prioritize/sets/:id/choices/:a/:b': remove(),
+  'GET /api/prioritize/sets/:id/result': view(),
+  'POST /api/prioritize/sets/:id/confirm': edit(),
+
   'GET /api/boards': view(),
   'POST /api/boards': edit(),
   'POST /api/boards/reorder': edit(),

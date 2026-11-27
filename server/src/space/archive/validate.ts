@@ -18,11 +18,13 @@ import {
   ARCHIVE_FORMAT,
   ARCHIVE_FORMAT_VERSION,
   archiveFrameSchema,
+  archivePrioritizationSchema,
   archiveRowSchemas,
   archiveUserSchema,
   EXPORT_FORMAT,
   formatVersionText,
   type ArchiveParsed,
+  type ArchivePrioritization,
 } from '@shared/archive';
 import { parseBounded } from '@shared/bounded';
 import type { EstimateUnit } from '@shared/constants';
@@ -68,6 +70,8 @@ export interface ImportArchive {
   /** Without the entries whose task or project the file does not have (they are dropped). */
   activity: ArchiveParsed['activity'];
   boards: ArchiveParsed['boards'];
+  /** Pairwise prioritization (HL-5); v2 files only, and empty when the file has none. */
+  prioritization: ArchivePrioritization;
 }
 
 /** The format the analysis names (ImportAnalysisDTO.format). */
@@ -101,7 +105,62 @@ export function validateArchive(body: unknown): ImportArchive {
       { path: 'formatVersion', message: 'Only versions 1 and 2 are supported' },
     ]);
   }
-  return checkIntegrity(version, readRows(version, body));
+  const archive = checkIntegrity(version, readRows(version, body));
+  archive.prioritization = readPrioritization(body.prioritization, archive);
+  return archive;
+}
+
+/** The optional `prioritization` key: its shape, then that its rows agree with each other and the tasks' ranks. */
+function readPrioritization(value: unknown, archive: Pick<ImportArchive, 'tasks' | 'version'>): ArchivePrioritization {
+  const none: ArchivePrioritization = { sets: [], items: [], comparisons: [] };
+  if (archive.version !== 2 || value === undefined || value === null) {
+    return none;
+  }
+  const parsed = archivePrioritizationSchema.safeParse(value);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0]!;
+    throw badRequest(`Invalid export file (prioritization): ${first.path.join('.')}: ${first.message}`, [
+      issueDetail(first, 'prioritization'),
+    ]);
+  }
+  const p = parsed.data;
+  const problems: Problem[] = [];
+  const add = (path: string, message: string) => {
+    if (problems.length < MAX_PROBLEMS) problems.push({ path: `prioritization.${path}`, message });
+  };
+  const setIds = new Set<number>();
+  p.sets.forEach((s, i) => {
+    if (setIds.has(s.id)) add(`sets.${i}.id`, `Duplicate set id ${s.id}`);
+    setIds.add(s.id);
+  });
+  const itemKeys = new Set<string>();
+  p.items.forEach((it, i) => {
+    if (!setIds.has(it.setId)) add(`items.${i}.setId`, `Set ${it.setId} does not exist`);
+    const k = `${it.setId}:${it.taskId}`;
+    if (itemKeys.has(k)) add(`items.${i}.taskId`, `Task ${it.taskId} is in set ${it.setId} twice`);
+    itemKeys.add(k);
+  });
+  const compIds = new Set<number>();
+  const pairs = new Set<string>();
+  p.comparisons.forEach((c, i) => {
+    if (compIds.has(c.id)) add(`comparisons.${i}.id`, `Duplicate comparison id ${c.id}`);
+    compIds.add(c.id);
+    if (!setIds.has(c.setId)) add(`comparisons.${i}.setId`, `Set ${c.setId} does not exist`);
+    if (c.taskLo >= c.taskHi) add(`comparisons.${i}.taskLo`, `Comparison ${c.id}: taskLo must be below taskHi`);
+    if (c.winner !== null && c.winner !== c.taskLo && c.winner !== c.taskHi) add(`comparisons.${i}.winner`, `Comparison ${c.id}: the winner is neither task`);
+    const k = `${c.setId}:${c.taskLo}:${c.taskHi}`;
+    if (pairs.has(k)) add(`comparisons.${i}.taskHi`, `Comparison ${c.id}: the pair is answered twice in set ${c.setId}`);
+    pairs.add(k);
+  });
+  archive.tasks.forEach((t, i) => {
+    if (t.prioritySetId !== undefined && !setIds.has(t.prioritySetId)) {
+      add(`tasks.${i}.prioritySetId`, `Task ${t.id}: set ${t.prioritySetId} does not exist`);
+    }
+  });
+  if (problems.length > 0) {
+    throw badRequest(`The export file is inconsistent: ${problems[0]!.path}: ${problems[0]!.message}`, problems);
+  }
+  return p;
 }
 
 type Rows = Record<ExportTable, unknown[]> & { users: unknown[] };
@@ -300,6 +359,7 @@ function checkIntegrity(version: 1 | 2, { frame, rows }: { frame: Frame; rows: R
   return {
     ...d,
     version,
+    prioritization: { sets: [], items: [], comparisons: [] },
     exportedAt: frame.exportedAt,
     appVersion: frame.appVersion,
     space: space && { name: space.name, exportedBy: space.exportedBy },

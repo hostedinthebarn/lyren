@@ -380,11 +380,14 @@ export const taskFilterSchema = z.object({
   includeArchivedProjects: z.boolean().optional(),
   /** true: only slipped tasks (their blockers push the due date later; docs/design/task-dependencies.md). */
   slipped: z.boolean().optional(),
+  /** true: only tasks with a confirmed priority rank; false: only those without one (HL-5). */
+  hasPriorityRank: z.boolean().optional(),
 });
 export type TaskFilter = z.infer<typeof taskFilterSchema>;
 
 export const TASK_SORT_FIELDS = [
   'manual', 'priority', 'dueDate', 'startDate', 'createdAt', 'updatedAt', 'title', 'number', 'estimate', 'status',
+  'priorityRank',
 ] as const;
 export type TaskSortField = (typeof TASK_SORT_FIELDS)[number];
 
@@ -808,3 +811,34 @@ export const resetPasskeyInput = z.object({
   name: passkeyNameSchema.optional(),
 });
 export type ResetPasskeyInput = z.input<typeof resetPasskeyInput>;
+
+// ---------------------------------------------------------------------------
+// Pairwise prioritization (HL-5)
+// ---------------------------------------------------------------------------
+
+/** The most tasks one set holds: a pairwise ranking of more is tedious (about n·log₂ n questions). */
+export const PRIORITIZE_MAX_ITEMS = 60;
+
+/** What a set is made of: the open tasks of a project, of an epic, or exactly these tasks. */
+export const prioritizeScopeSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('project'), projectId: idSchema }),
+  z.object({ type: z.literal('epic'), epicId: idSchema }),
+  z.object({ type: z.literal('tasks'), taskIds: z.array(idSchema).min(2).max(PRIORITIZE_MAX_ITEMS) }),
+]);
+
+export const prioritizeSetCreateInput = z.object({
+  name: z.string().trim().min(1).max(200).optional(),
+  scope: prioritizeScopeSchema,
+});
+export type PrioritizeSetCreateInput = z.input<typeof prioritizeSetCreateInput>;
+
+/** One answer: `winner` is `a` or `b`, null for "equal". Answering a pair again replaces the earlier answer. */
+export const prioritizeChoiceInput = z
+  .object({ a: idSchema, b: idSchema, winner: idSchema.nullable() })
+  .refine((v) => v.a !== v.b, { message: 'Pick two different tasks', path: ['b'] })
+  .refine((v) => v.winner === null || v.winner === v.a || v.winner === v.b, { message: 'The winner must be a or b', path: ['winner'] });
+export type PrioritizeChoiceInput = z.input<typeof prioritizeChoiceInput>;
+
+/** Confirming writes priority_rank to the tasks; before every question is answered it needs allowIncomplete. */
+export const prioritizeConfirmInput = z.object({ allowIncomplete: z.boolean().optional() });
+export type PrioritizeConfirmInput = z.input<typeof prioritizeConfirmInput>;

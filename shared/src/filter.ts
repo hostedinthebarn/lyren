@@ -116,6 +116,7 @@ export function matchesTaskFilter(task: TaskDTO, filter: TaskFilter, ctx: Filter
   }
 
   if (filter.slipped && !(task.slipDays > 0)) return false;
+  if (filter.hasPriorityRank !== undefined && (task.priorityRank !== null) !== filter.hasPriorityRank) return false;
 
   // Search: every token must appear in title, description or ref (case-insensitive).
   const tokens = searchTokens(filter.search);
@@ -160,7 +161,7 @@ const cmpPrimitive = <T extends string | number>(x: T, y: T): number => (x < y ?
 /**
  * Comparator implementing TaskSort. Rules (mirrored by the SQL ORDER BY):
  *  - 'manual': rank, then id (dir 'desc' reverses both).
- *  - dueDate/startDate/estimate: nulls always last, dir applies to non-null values; dueDate is effectiveDueDate.
+ *  - dueDate/startDate/estimate/priorityRank: nulls always last, dir applies to non-null values; dueDate is effectiveDueDate.
  *  - priority: 0 ("no priority") always last; dir applies to 1..4 ('desc' = urgent first).
  *  - title: case-insensitive (ASCII lower-casing, like SQLite NOCASE).
  *  - status: by status position.
@@ -187,6 +188,9 @@ export function compareTasks(a: TaskDTO, b: TaskDTO, sort: TaskSort, ctx: SortCo
       break;
     case 'estimate':
       r = cmpNullsLast(a.estimate, b.estimate, (x, y) => sign * cmpPrimitive(x, y));
+      break;
+    case 'priorityRank':
+      r = cmpNullsLast(a.priorityRank, b.priorityRank, (x, y) => sign * cmpPrimitive(x, y));
       break;
     case 'createdAt':
       r = sign * cmpPrimitive(a.createdAt, b.createdAt);
