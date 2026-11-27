@@ -92,6 +92,13 @@ for bad_name in notes.md tool.py run.sh .env cert.pem id.key req.csr doc.rtf CLA
   expect fail "payload rejects $bad_name" bash "$PAY" pay2
 done
 rm -rf pay2; cp -r pay pay2; ln -s /etc/hostname pay2/link.txt; expect fail "payload rejects symlink" bash "$PAY" pay2
+# .well-known is exempt only as itself (CodeRabbit on lyren#19): a hidden component before or after it still fails.
+rm -rf pay2; cp -r pay pay2; mkdir -p pay2/.well-known; echo x > pay2/.well-known/security.txt
+expect pass "payload allows .well-known/security.txt" bash "$PAY" pay2
+for bad_name in .well-known/.private/config.js .private/.well-known/config.js .well-known/.env.txt a/.well-known/.x/b.js; do
+  rm -rf pay2; cp -r pay pay2; mkdir -p "pay2/$(dirname "$bad_name")"; echo x > "pay2/$bad_name"
+  expect fail "payload rejects $bad_name" bash "$PAY" pay2
+done
 mkdir -p empty; expect fail "empty payload fails" bash "$PAY" empty
 expect fail "missing payload dir fails" bash "$PAY" nope
 echo "passed=$pass wrong=$bad"; [ "$bad" = 0 ]

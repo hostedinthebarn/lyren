@@ -16,6 +16,9 @@ ALLOW_REPO_PATH=.ci/secret-scan-allow.tsv
 # lyren has a password login, so the bare word is everywhere (2,520 of 2,644 whole-repo hits, 2026-11-26).
 # Here only a password ASSIGNED A LITERAL of 8+ characters counts: password = "…", password: '…', "password": "…".
 # Gary chose this for lyren only (GEN-233 option 1, 2026-11-27); every other repo keeps the bare word.
+# Known misses, accepted (CodeRabbit on lyren#19): a literal with a space in it (a passphrase), because matching
+# those flagged 35 test passphrases and UI messages; and a literal that starts on the line after the "=", because
+# the scan reads one line at a time. Both still need the literal in the source, which review would see.
 PAT_I=('[c]lient_secret' '[a]pi[_-]?key' '[r]efresh_token' '[t]oken='
        "[p]assword[\"']?[[:space:]]*[:=][[:space:]]*[\"'\`][^\"'\`[:space:]]{8,}")   # case-insensitive
 PAT_S=('[G]OCSPX-' 'BEGI[N] .*PRIVATE KEY' '[A]KIA' '[B]earer ')                       # case-sensitive

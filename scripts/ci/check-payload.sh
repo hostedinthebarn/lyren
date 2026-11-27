@@ -16,10 +16,12 @@ fail=0; count=0
 while IFS= read -r -d '' f; do
   count=$((count+1)); rel=${f#"$dir"/}; base=${rel##*/}
   ext=$(printf '%s' "${base##*.}" | tr 'A-Z' 'a-z')
+  # Only a folder named exactly .well-known is exempt; every other hidden component fails, before or after it.
+  x=/$rel/; while [[ $x == */.well-known/* ]]; do x=${x//\/.well-known\//\/}; done
   why=''
   if [ -L "$f" ]; then why='symlink'
   elif [[ $rel =~ $DENY ]]; then why='forbidden type or path'
-  elif [[ /$rel == */.* && $rel != .well-known/* && /$rel != */.well-known/* ]]; then why='dotfile or dot folder'
+  elif [[ $x == */.* ]]; then why='dotfile or dot folder'
   elif [[ $base == *.* && $ext =~ ^($ALLOWED_EXT)$ ]]; then :
   elif [[ $base =~ ^($ALLOWED_NAMES)$ ]]; then :
   else why='not on the web-asset allowlist'; fi
