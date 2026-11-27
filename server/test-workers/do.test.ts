@@ -107,13 +107,19 @@ describe('SpaceDO', () => {
     testHooks.holdAuthorize = new Promise<void>((resolve) => {
       release = resolve;
     });
+    // Wait for the request to reach the hold, not a fixed time: on a busy runner 10 ms was sometimes too
+    // short, the hold was lifted before the request got there, and it finished early (HL-5 CI).
+    const held = new Promise<void>((resolve) => {
+      testHooks.onHeld = resolve;
+    });
     // A new session's first request: the directory answers "member" and holds the answer.
     const first = member.client.get(`/api/s/${spaceId}/tags`);
     let firstDone = false;
     void first.then(() => {
       firstDone = true;
     });
-    await settle();
+    await held;
+    testHooks.onHeld = null;
     const before = directoryCalls.authorizeSpace;
     // Demoted meanwhile: the push (awaited for a demotion) clears the space's cache.
     testHooks.holdAuthorize = null;

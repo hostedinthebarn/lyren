@@ -48,6 +48,8 @@ export const testHooks = {
   failDestroy: new Set<string>(),
   /** While set, authorizeSpace computes its answer, then waits for this before it returns it. */
   holdAuthorize: null as Promise<void> | null,
+  /** Called when an authorizeSpace call starts waiting on holdAuthorize, so a test can wait for that moment. */
+  onHeld: null as (() => void) | null,
 };
 
 /** The calls of one space so far (zeros when none reached it). */
@@ -72,7 +74,11 @@ export class DirectoryDO extends WorkerDirectoryDO {
   override async authorizeSpace(input: Parameters<WorkerDirectoryDO['authorizeSpace']>[0]) {
     directoryCalls.authorizeSpace++;
     const answer = await super.authorizeSpace(input);
-    if (testHooks.holdAuthorize) await testHooks.holdAuthorize;
+    if (testHooks.holdAuthorize) {
+      const held = testHooks.holdAuthorize;
+      testHooks.onHeld?.();
+      await held;
+    }
     return answer;
   }
 
