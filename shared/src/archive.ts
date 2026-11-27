@@ -61,11 +61,58 @@ export const archiveRowSchemas = {
   tasks: rows.tasks.extend({
     blockedBy: z.array(exportIdSchema).max(10_000).optional(),
     assigneeId: archiveUserRefSchema.nullable().optional(),
+    /** The confirmed priority rank and its set (HL-5); absent in archives written before them, and when null. */
+    priorityRank: z.number().int().min(1).max(10_000).optional(),
+    prioritySetId: exportIdSchema.optional(),
   }),
   comments: rows.comments.extend(provenance),
   worklogs: rows.worklogs.extend(provenance),
   activity: rows.activity.extend(provenance),
 };
+
+/**
+ * Pairwise prioritization (HL-5), an optional key of the archive, so the format version stays 2: the sets, the
+ * tasks each holds (with the ref and title it had then; a task may no longer exist) and the answers given. The
+ * people who made the sets and answers are not carried: an import leaves them empty.
+ */
+export const archivePrioritizationSchema = z.object({
+  sets: z
+    .array(
+      z.object({
+        id: exportIdSchema,
+        name: z.string().max(200),
+        scopeType: z.enum(['project', 'epic', 'tasks']),
+        scopeId: exportIdSchema.nullable(),
+        createdAt: exportTimestampSchema,
+        confirmedAt: exportTimestampSchema.nullable(),
+      }),
+    )
+    .max(10_000),
+  items: z
+    .array(
+      z.object({
+        setId: exportIdSchema,
+        taskId: exportIdSchema,
+        ref: z.string().max(100),
+        title: z.string().max(1000),
+        addedAt: exportTimestampSchema,
+      }),
+    )
+    .max(600_000),
+  comparisons: z
+    .array(
+      z.object({
+        id: exportIdSchema,
+        setId: exportIdSchema,
+        taskLo: exportIdSchema,
+        taskHi: exportIdSchema,
+        winner: exportIdSchema.nullable(),
+        answeredAt: exportTimestampSchema,
+      }),
+    )
+    .max(1_000_000),
+});
+export type ArchivePrioritization = z.output<typeof archivePrioritizationSchema>;
 
 /** The fields of an archive besides its users and tables. */
 const archiveHeader = {
@@ -98,6 +145,7 @@ export const spaceArchiveSchema = z.object({
   worklogs: exportTableList('worklogs', archiveRowSchemas.worklogs),
   activity: exportTableList('activity', archiveRowSchemas.activity),
   boards: exportTableList('boards', archiveRowSchemas.boards),
+  prioritization: archivePrioritizationSchema.optional(),
 });
 
 /** An archive with its users and rows left unchecked: the header, and each list within its cap. */

@@ -126,6 +126,9 @@ export function rowsToInsert(plan: ImportPlan): TableRows {
     tasks: counts.tasks,
     task_tags: archive.tasks.reduce((n, t) => n + tagsOf(t.tagIds).length, 0),
     task_links: archive.tasks.reduce((n, t) => n + linksOf(t).length, 0),
+    prioritization_sets: archive.prioritization.sets.length,
+    prioritization_items: archive.prioritization.items.length,
+    prioritization_comparisons: archive.prioritization.comparisons.length,
     comments: counts.comments,
     work_logs: counts.worklogs,
     activity: counts.activity,
@@ -174,6 +177,9 @@ const DELETE_ORDER = [
   'tasks',
   'task_tags',
   'task_links',
+  'prioritization_comparisons',
+  'prioritization_items',
+  'prioritization_sets',
   'comments',
   'work_logs',
   'activity',
@@ -186,7 +192,7 @@ const DELETE_ORDER = [
 ] as const;
 
 /** Domain tables with an AUTOINCREMENT id (everything but task_tags and task_links). */
-const SEQUENCED = DELETE_ORDER.filter((t) => t !== 'task_tags' && t !== 'task_links');
+const SEQUENCED = DELETE_ORDER.filter((t) => t !== 'task_tags' && t !== 'task_links' && t !== 'prioritization_items');
 
 /** A JSON.stringify replacer that leaves out `__proto__` keys (activity data is the file's object, validate.ts). */
 const withoutProto = (key: string, value: unknown) => (key === '__proto__' ? undefined : value);
@@ -418,6 +424,7 @@ export function writeImport(db: Db, plan: ImportPlan, o: { now: string; safety: 
         ...['id', 'project_id', 'number', 'epic_id', 'status_id', 'title', 'title_fold', 'description', 'description_fold'],
         ...['priority', 'start_date', 'due_date', 'estimate', 'rank', 'completed_at', 'archived_at', 'created_by'],
         ...['assignee_id', 'created_at', 'updated_at', 'tag_ids', 'comment_count', 'worklog_minutes'],
+        ...['priority_rank', 'priority_set_id'],
       ],
       d.tasks.map((t) => ({
         id: t.id,
@@ -443,6 +450,8 @@ export function writeImport(db: Db, plan: ImportPlan, o: { now: string; safety: 
         tag_ids: JSON.stringify(tagsOf(t.tagIds)),
         comment_count: commentCount.get(t.id) ?? 0,
         worklog_minutes: loggedMinutes.get(t.id) ?? 0,
+        priority_rank: t.priorityRank ?? null,
+        priority_set_id: t.prioritySetId ?? null,
       })),
     );
     // Task dependencies, after both ends exist (no trigger reads them).
@@ -451,6 +460,43 @@ export function writeImport(db: Db, plan: ImportPlan, o: { now: string; safety: 
       'task_links',
       ['blocker_id', 'blocked_id', 'created_at'],
       d.tasks.flatMap((t) => linksOf(t).map((blockerId) => ({ blocker_id: blockerId, blocked_id: t.id, created_at: now }))),
+    );
+
+    // Pairwise prioritization (HL-5): the sets, the tasks they held and the answers; nobody is named as their author.
+    const pr = d.prioritization;
+    insertRows(
+      db,
+      'prioritization_sets',
+      ['id', 'name', 'scope_type', 'scope_id', 'created_by', 'created_at', 'confirmed_at'],
+      pr.sets.map((s) => ({
+        id: s.id,
+        name: s.name,
+        scope_type: s.scopeType,
+        scope_id: s.scopeId,
+        created_by: null,
+        created_at: s.createdAt,
+        confirmed_at: s.confirmedAt,
+      })),
+    );
+    insertRows(
+      db,
+      'prioritization_items',
+      ['set_id', 'task_id', 'ref_snapshot', 'title_snapshot', 'added_at'],
+      pr.items.map((i) => ({ set_id: i.setId, task_id: i.taskId, ref_snapshot: i.ref, title_snapshot: i.title, added_at: i.addedAt })),
+    );
+    insertRows(
+      db,
+      'prioritization_comparisons',
+      ['id', 'set_id', 'task_lo', 'task_hi', 'winner', 'answered_by', 'answered_at'],
+      pr.comparisons.map((c) => ({
+        id: c.id,
+        set_id: c.setId,
+        task_lo: c.taskLo,
+        task_hi: c.taskHi,
+        winner: c.winner,
+        answered_by: null,
+        answered_at: c.answeredAt,
+      })),
     );
 
     const activity = plan.skipActivity ? [] : d.activity;

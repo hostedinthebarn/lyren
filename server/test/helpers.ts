@@ -68,7 +68,7 @@ export const NO_SPACE_ID = '0000000000000000';
 // The first path segments of the space endpoints (§14.3): the test client puts them under /api/s/<id>/, so
 // tests keep today's paths.
 const SPACE_SEGMENTS: ReadonlySet<string> = new Set(
-  'bootstrap projects milestones epics tasks comments worklogs activity boards tags statuses settings data dashboard search people'.split(' '),
+  'bootstrap projects milestones epics tasks comments worklogs activity boards tags statuses settings data dashboard search people prioritize'.split(' '),
 );
 
 /** '/api/tasks?x=1' → '/api/s/<spaceId>/tasks?x=1'; directory paths and paths under /api/s/ stay as they are. */

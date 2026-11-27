@@ -101,6 +101,9 @@ export interface TaskRow {
   due_date: string | null;
   estimate: number | null;
   rank: string;
+  /** The confirmed pairwise-prioritization result (migration 6): 1 = most important; null = none. */
+  priority_rank: number | null;
+  priority_set_id: number | null;
   completed_at: string | null;
   archived_at: string | null;
   created_by: number | null;

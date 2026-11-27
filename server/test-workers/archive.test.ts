@@ -136,7 +136,7 @@ describe('archive v2 through the Worker', () => {
 
   it('over IMPORT_MAX_ROW_WRITES: refused before anything is reserved; without the activity it fits', async () => {
     await freshBudget();
-    const archive = reviewArchive({ tasks: 3500, comments: 300, worklogs: 100, extraActivity: 0 });
+    const archive = reviewArchive({ tasks: 3480, comments: 300, worklogs: 100, extraActivity: 0 });
     const target = await newSpace('Too big');
     const { analysis, commit } = await importArchive(owner, { path: s(target), mode: 'new', file: archive, gzip: true });
     const { rowWrites, rowWritesWithoutActivity } = (analysis.body as ImportAnalysisDTO).estimate;
@@ -150,7 +150,7 @@ describe('archive v2 through the Worker', () => {
     expect(await inDirectory((db) => db.all("SELECT key FROM auth_throttle WHERE substr(key, 1, 7) = 'import:'"))).toEqual([]);
     const without = await importArchive(owner, { path: s(target), mode: 'new', file: archive, gzip: true, skipActivity: true });
     expect(without.commit.status, JSON.stringify(without.commit.body)).toBe(200);
-    expect(without.commit.body.counts).toMatchObject({ tasks: 3500, activity: 0 });
+    expect(without.commit.body.counts).toMatchObject({ tasks: 3480, activity: 0 });
   });
 
   it('replace: the re-auth window, the typed space stays, no safety point on Cloudflare', async () => {

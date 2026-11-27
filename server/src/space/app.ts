@@ -17,6 +17,7 @@ import { dashboardRoutes } from '../routes/dashboard';
 import { dataRoutes } from '../routes/data';
 import { epicRoutes } from '../routes/epics';
 import { milestoneRoutes } from '../routes/milestones';
+import { prioritizeRoutes } from '../routes/prioritize';
 import { projectRoutes } from '../routes/projects';
 import { searchRoutes } from '../routes/search';
 import { settingsRoutes } from '../routes/settings';
@@ -51,6 +52,7 @@ export function createSpaceApp(deps: Deps): Hono<AppEnv> {
   app.route('/api/epics', epicRoutes(deps));
   app.route('/api/tasks', taskRoutes(deps));
   app.route('/api', timelineRoutes(deps)); // /tasks/:id/timeline|comments|worklogs, /comments/:id, /worklogs, /activity
+  app.route('/api/prioritize', prioritizeRoutes(deps));
   app.route('/api/boards', boardRoutes(deps));
   app.route('/api/tags', tagRoutes(deps));
   app.route('/api/statuses', statusRoutes(deps));

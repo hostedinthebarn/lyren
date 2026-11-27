@@ -144,6 +144,8 @@ export function hydrateTasks(db: Db, rows: readonly TaskRow[], schedule?: Schedu
       dueDate: r.due_date,
       estimate: r.estimate,
       rank: r.rank,
+      priorityRank: r.priority_rank,
+      prioritySetId: r.priority_set_id,
       completedAt: r.completed_at,
       archivedAt: r.archived_at,
       createdBy: r.created_by,
@@ -351,6 +353,10 @@ export function buildTaskWhere(filter: TaskFilter, ctx: TaskWhereContext): SqlFr
     clauses.push(ctx.slips && ctx.slips.size > 0 ? 't.id IN (SELECT CAST(key AS INTEGER) FROM json_each(:slips))' : '0');
   }
 
+  if (filter.hasPriorityRank !== undefined) {
+    clauses.push(filter.hasPriorityRank ? 't.priority_rank IS NOT NULL' : 't.priority_rank IS NULL');
+  }
+
   // The JS reference's haystack is `${title}\n${description}\n${ref}`, lower-cased; here the stored folds
   // (= JS toLowerCase, which folding a concatenation piecewise leaves unchanged), so Unicode folding is
   // identical. The tokens are already folded by searchTokens and hold no whitespace, so a token occurs in
@@ -407,6 +413,8 @@ export function taskOrderBy(sort: TaskSort, slipped?: ReadonlyMap<number, ISODat
       return `t.start_date IS NULL, t.start_date ${dir}, ${tie}`;
     case 'estimate':
       return `t.estimate IS NULL, t.estimate ${dir}, ${tie}`;
+    case 'priorityRank':
+      return `t.priority_rank IS NULL, t.priority_rank ${dir}, ${tie}`;
     case 'createdAt':
       return `t.created_at ${dir}, ${tie}`;
     case 'updatedAt':

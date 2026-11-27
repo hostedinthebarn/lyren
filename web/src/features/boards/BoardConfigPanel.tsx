@@ -44,6 +44,7 @@ const SORT_FIELD_LABELS: Record<TaskSortField, string> = {
   number: 'Task number',
   estimate: 'Estimate',
   status: 'Status',
+  priorityRank: 'Priority rank',
 };
 
 const COLOR_BY_LABELS: Record<CardColorBy, string> = {

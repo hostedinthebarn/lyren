@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Db } from '../../src/core/db';
 import { migrate, readSchemaState, withDeferredForeignKeys, type Migration, type MigrationSet } from '../../src/core/migrate';
 import { DIRECTORY_MIGRATIONS, DIRECTORY_V1, DIRECTORY_V2_TOKENS } from '../../src/directory/schema';
-import { SPACE_MIGRATIONS, SPACE_V1, SPACE_V4, SPACE_V5 } from '../../src/space/schema';
+import { SPACE_MIGRATIONS, SPACE_V1, SPACE_V4, SPACE_V5, SPACE_V6 } from '../../src/space/schema';
 
 export type WithDb = <T>(body: (db: Db) => T) => Promise<T>;
 
@@ -664,10 +664,10 @@ export function defineDbContract(kind: Db['kind'], withDb: WithDb, options: DbCo
         },
         {
           set: SPACE_MIGRATIONS,
-          // Migration 4 adds task_links (task dependencies), migration 5 tasks.assignee_id and its index.
-          ddl: SPACE_V1 + SPACE_V4 + SPACE_V5,
+          // Migration 4 adds task_links (task dependencies), migration 5 tasks.assignee_id and its index, migration 6 the prioritization tables and tasks.priority_rank.
+          ddl: SPACE_V1 + SPACE_V4 + SPACE_V5 + SPACE_V6,
           tables: [
-            '_meta', 'activity', 'boards', 'comments', 'epics', 'milestones', 'projects', 'settings', 'statuses', 'tags',
+            '_meta', 'activity', 'boards', 'comments', 'epics', 'milestones', 'prioritization_comparisons', 'prioritization_items', 'prioritization_sets', 'projects', 'settings', 'statuses', 'tags',
             'task_links', 'task_tags', 'tasks', 'users', 'work_logs',
           ],
           // Migration 2: tasks.tag_ids and the triggers that keep it (Appendix D 42); migration 3: the comment
@@ -889,6 +889,45 @@ export function defineDbContract(kind: Db['kind'], withDb: WithDb, options: DbCo
           expect(() => db.run('INSERT INTO task_links (blocker_id, blocked_id, created_at) VALUES (1, 9, :t)', t)).toThrow(/FOREIGN KEY/);
           db.run('DELETE FROM tasks WHERE id = 2');
           expect(db.all('SELECT * FROM task_links')).toEqual([]);
+          expect(db.all('PRAGMA foreign_key_check')).toEqual([]);
+        }));
+
+      it('space migration 6: a database of migration 5 upgrades in place, keeps its rows, and its prioritization rows outlive a deleted task', () =>
+        withDb((db) => {
+          migrate(db, { schema: 'space', migrations: SPACE_MIGRATIONS.migrations.slice(0, 5) }, { appVersion: '2.0.0' });
+          const t = { t: T0 };
+          db.run(
+            "INSERT INTO projects (id, key, name, name_fold, description, description_fold, color, created_at, updated_at) VALUES (1, 'WEB', 'Web', 'web', '', '', '#6366f1', :t, :t)",
+            t,
+          );
+          db.run("INSERT INTO statuses (id, name, name_fold, category, color, created_at, updated_at) VALUES (1, 'Todo', 'todo', 'unstarted', '#64748b', :t, :t)", t);
+          for (const id of [1, 2]) {
+            db.run(
+              `INSERT INTO tasks (id, project_id, number, status_id, title, title_fold, description_fold, rank, created_at, updated_at)
+               VALUES (:id, 1, :id, 1, 'Task', 'task', '', :rank, :t, :t)`,
+              { id, rank: `a${id}`, ...t },
+            );
+          }
+          expect(migrate(db, SPACE_MIGRATIONS, { appVersion: '2.0.1' })).toEqual({ from: 5, to: 6 });
+          expect(meta(db)).toMatchObject({ version: '6', compatible_from: '1' });
+          // Existing tasks keep their rank and have no priority_rank.
+          expect(db.all('SELECT id, rank, priority_rank, priority_set_id FROM tasks ORDER BY id')).toEqual([
+            { id: 1, rank: 'a1', priority_rank: null, priority_set_id: null },
+            { id: 2, rank: 'a2', priority_rank: null, priority_set_id: null },
+          ]);
+          db.run("INSERT INTO prioritization_sets (id, name, scope_type, created_at) VALUES (1, 'S', 'tasks', :t)", t);
+          db.run("INSERT INTO prioritization_items (set_id, task_id, ref_snapshot, title_snapshot, added_at) VALUES (1, 1, 'WEB-1', 'Task', :t), (1, 2, 'WEB-2', 'Task', :t)", t);
+          db.run('INSERT INTO prioritization_comparisons (set_id, task_lo, task_hi, winner, answered_at) VALUES (1, 1, 2, 1, :t)', t);
+          expect(() => db.run('INSERT INTO prioritization_comparisons (set_id, task_lo, task_hi, winner, answered_at) VALUES (1, 2, 1, 1, :t)', t)).toThrow(/CHECK/);
+          expect(() => db.run('INSERT INTO prioritization_comparisons (set_id, task_lo, task_hi, winner, answered_at) VALUES (1, 1, 2, 2, :t)', t)).toThrow(/UNIQUE/);
+          // No foreign key from the history to tasks: a hard delete leaves it.
+          db.run('DELETE FROM tasks WHERE id = 2');
+          expect(db.all('SELECT COUNT(*) AS n FROM prioritization_items')).toEqual([{ n: 2 }]);
+          expect(db.all('SELECT COUNT(*) AS n FROM prioritization_comparisons')).toEqual([{ n: 1 }]);
+          // The set owns its items and answers.
+          db.run('DELETE FROM prioritization_sets WHERE id = 1');
+          expect(db.all('SELECT COUNT(*) AS n FROM prioritization_items')).toEqual([{ n: 0 }]);
+          expect(db.all('SELECT COUNT(*) AS n FROM prioritization_comparisons')).toEqual([{ n: 0 }]);
           expect(db.all('PRAGMA foreign_key_check')).toEqual([]);
         }));
 

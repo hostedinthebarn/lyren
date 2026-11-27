@@ -2,6 +2,7 @@
 // ('2026-10-13T20:15:00.000Z'); all calendar dates are 'YYYY-MM-DD'.
 // Field names are camelCase; database columns are snake_case.
 
+import type { ArchivePrioritization } from './archive';
 import type { BoardConfig } from './board';
 import type {
   AuthMethod,
@@ -283,6 +284,12 @@ export interface TaskDTO {
   estimate: number | null;
   /** Fractional-index string; ascending rank = manual order. */
   rank: string;
+  /**
+   * Where the last confirmed pairwise prioritization put the task (1 = most important), null when none has.
+   * Separate from `rank`, which only holds the manual board order. `prioritySetId` is that set.
+   */
+  priorityRank: number | null;
+  prioritySetId: number | null;
   /** Set while the task's status category is completed/cancelled. */
   completedAt: string | null;
   archivedAt: string | null;
@@ -648,7 +655,7 @@ export interface ExportDTO {
   milestones: Array<Omit<MilestoneDTO, 'stats'>>;
   epics: Array<Omit<EpicDTO, 'stats'>>;
   tasks: Array<
-    Omit<TaskDTO, 'ref' | 'milestoneId' | 'tags' | 'commentCount' | 'worklogMinutes' | 'assigneeId' | TaskLinkFields> & {
+    Omit<TaskDTO, 'ref' | 'milestoneId' | 'tags' | 'commentCount' | 'worklogMinutes' | 'assigneeId' | 'priorityRank' | 'prioritySetId' | TaskLinkFields> & {
       tagIds: number[];
     }
   >;
@@ -695,7 +702,17 @@ export interface SpaceArchiveDTO {
   milestones: ExportDTO['milestones'];
   epics: ExportDTO['epics'];
   /** `blockedBy`: the task's blockers (task dependencies); absent in archives written before them. */
-  tasks: Array<ExportDTO['tasks'][number] & { blockedBy?: number[]; assigneeId?: number | null }>;
+  tasks: Array<
+    ExportDTO['tasks'][number] & {
+      blockedBy?: number[];
+      assigneeId?: number | null;
+      /** The confirmed priority rank and its set (HL-5); absent in archives written before them, and when null. */
+      priorityRank?: number;
+      prioritySetId?: number;
+    }
+  >;
+  /** Pairwise prioritization (HL-5): absent in archives written before it, and when the space has none. */
+  prioritization?: ArchivePrioritization;
   comments: Array<ExportDTO['comments'][number] & ArchiveProvenance>;
   worklogs: Array<ExportDTO['worklogs'][number] & ArchiveProvenance>;
   activity: Array<ExportDTO['activity'][number] & ArchiveProvenance>;
@@ -1045,4 +1062,64 @@ export interface PasskeyRemovedDTO {
 export interface ReauthDTO {
   ok: true;
   reauthUntil: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Pairwise prioritization (HL-5)
+// ---------------------------------------------------------------------------
+
+export interface PrioritizeSetDTO {
+  id: number;
+  name: string;
+  scopeType: 'project' | 'epic' | 'tasks';
+  scopeId: number | null;
+  createdBy: number | null;
+  createdAt: string;
+  /** When the result was last written to the tasks (priority_rank); null before the first confirm. */
+  confirmedAt: string | null;
+  itemCount: number;
+  /** Pairs answered so far. */
+  answered: number;
+}
+
+export interface PrioritizeItemDTO {
+  taskId: number;
+  /** The task's ref and title when the set was made (the task's own, while it still exists and is unchanged). */
+  ref: string;
+  title: string;
+  /** The task was hard-deleted: its answers are kept, and it is no longer asked about. */
+  deleted: boolean;
+  archived: boolean;
+}
+
+export interface PrioritizeNextDTO {
+  /** The pair to ask, or null when the order is settled (`done`). */
+  pair: [PrioritizeItemDTO, PrioritizeItemDTO] | null;
+  done: boolean;
+  answered: number;
+}
+
+export interface PrioritizeResultItemDTO extends PrioritizeItemDTO {
+  /** 1 = most important. */
+  position: number;
+  /** 0-100, for display; the position is the answer. */
+  score: number;
+  wins: number;
+  losses: number;
+  ties: number;
+}
+
+export interface PrioritizeResultDTO {
+  set: PrioritizeSetDTO;
+  /** Every question is answered or settled by earlier answers. */
+  done: boolean;
+  items: PrioritizeResultItemDTO[];
+}
+
+export interface PrioritizeChoiceDTO {
+  a: number;
+  b: number;
+  winner: number | null;
+  answeredBy: number | null;
+  answeredAt: string;
 }

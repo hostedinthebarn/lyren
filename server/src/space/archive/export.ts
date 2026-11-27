@@ -91,6 +91,28 @@ function* list<T>(name: string, rowPages: Iterable<T[]>, toJson: (row: T) => unk
 const provenance = (r: { imported_by: number | null; imported_at: string | null }) =>
   r.imported_by === null && r.imported_at === null ? {} : { importedBy: r.imported_by, importedAt: r.imported_at };
 
+/**
+ * The optional `prioritization` key (HL-5): written only when the space has a set, so an archive of a space that
+ * never used it is what it was before. Comparisons and items are read whole (a set holds 60 tasks at most).
+ */
+function* prioritizationPiece(db: Db): Generator<string> {
+  const sets = db.all<{ id: number; name: string; scope_type: string; scope_id: number | null; created_at: string; confirmed_at: string | null }>(
+    'SELECT id, name, scope_type, scope_id, created_at, confirmed_at FROM prioritization_sets ORDER BY id',
+  );
+  if (sets.length === 0) return;
+  const items = db.all<{ set_id: number; task_id: number; ref_snapshot: string; title_snapshot: string; added_at: string }>(
+    'SELECT set_id, task_id, ref_snapshot, title_snapshot, added_at FROM prioritization_items ORDER BY set_id, task_id',
+  );
+  const comparisons = db.all<{ id: number; set_id: number; task_lo: number; task_hi: number; winner: number | null; answered_at: string }>(
+    'SELECT id, set_id, task_lo, task_hi, winner, answered_at FROM prioritization_comparisons ORDER BY id',
+  );
+  yield `,"prioritization":${JSON.stringify({
+    sets: sets.map((s) => ({ id: s.id, name: s.name, scopeType: s.scope_type, scopeId: s.scope_id, createdAt: s.created_at, confirmedAt: s.confirmed_at })),
+    items: items.map((i) => ({ setId: i.set_id, taskId: i.task_id, ref: i.ref_snapshot, title: i.title_snapshot, addedAt: i.added_at })),
+    comparisons: comparisons.map((c) => ({ id: c.id, setId: c.set_id, taskLo: c.task_lo, taskHi: c.task_hi, winner: c.winner, answeredAt: c.answered_at })),
+  })}`;
+}
+
 /** The archive of the space in `db` as JSON text, in pieces (see the header). */
 export function* archivePieces(db: Db, info: ArchiveInfo): Generator<string> {
   // Each task's blockers (task dependencies), written on the task as `blockedBy`: one read of the links.
@@ -196,6 +218,8 @@ export function* archivePieces(db: Db, info: ArchiveInfo): Generator<string> {
     tagIds: parseJson(t.tag_ids, []) as number[],
     ...(blockers.has(t.id) ? { blockedBy: blockers.get(t.id)! } : {}),
     ...(t.assignee_id !== null ? { assigneeId: t.assignee_id } : {}),
+    ...(t.priority_rank !== null ? { priorityRank: t.priority_rank } : {}),
+    ...(t.priority_set_id !== null ? { prioritySetId: t.priority_set_id } : {}),
   }));
   yield* list<CommentRow>('comments', pages<CommentRow>(db, 'comments'), (cm) => ({
     id: cm.id,
@@ -236,6 +260,7 @@ export function* archivePieces(db: Db, info: ArchiveInfo): Generator<string> {
     [db.all<BoardRow>('SELECT * FROM boards ORDER BY project_id IS NOT NULL, project_id, position, id')],
     toBoardDTO,
   );
+  yield* prioritizationPiece(db);
   yield '}';
 }
 

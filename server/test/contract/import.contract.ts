@@ -15,7 +15,7 @@ import { reviewArchive } from '../support/archiveFixture';
 import type { WithSpaceDb } from './fixtures';
 
 /** The digest of the rows the import below writes (see the header). */
-export const IMPORT_DUMP_SHA256 = 'a7bcff7ecfe62bf340d5f11280e2a6c47efe4e9efde4c398d20d1064fc83c0b2';
+export const IMPORT_DUMP_SHA256 = 'e5472265f863ddd5f0374085f3540cf0664a463bf1eb25edaeabfa949690b23c';
 
 const NOW = '2026-10-18T12:00:00.000Z';
 
