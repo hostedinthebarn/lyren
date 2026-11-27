@@ -259,7 +259,7 @@ export function getResult(db: Db, setId: number): PrioritizeResultDTO {
 }
 
 /**
- * Confirm the result: write each existing task's position to tasks.priority_rank and the set to
+ * Confirm the result: write each existing task's place (1..n among the live tasks) to tasks.priority_rank and the set to
  * priority_set_id (the latest confirmed set wins; tasks outside this set keep what they had). `rank` is not
  * touched. Needs every question answered unless `allowIncomplete`. Returns the result as written.
  */
@@ -270,7 +270,8 @@ export function confirmResult(db: Db, setId: number, input: PrioritizeConfirmInp
       throw conflict('Some pairs are still open. Finish the questions, or confirm with allowIncomplete.');
     }
     const now = nowIso();
-    const rows = result.items.filter((i) => !i.deleted).map((i) => ({ id: i.taskId, position: i.position }));
+    // Renumbered 1..n over the tasks that still exist, so a deleted task leaves no gap (Gary, 2026-11-27).
+    const rows = result.items.filter((i) => !i.deleted).map((i, n) => ({ id: i.taskId, position: n + 1 }));
     db.run(
       `UPDATE tasks SET priority_rank = (SELECT json_extract(value, '$.position') FROM json_each(:rows) WHERE json_extract(value, '$.id') = tasks.id),
                         priority_set_id = :setId, updated_at = :now

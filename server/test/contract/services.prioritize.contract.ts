@@ -173,6 +173,8 @@ export function definePrioritizeContract(adapter: string, withSpaceDb: WithSpace
         // Confirming writes only the tasks that still exist.
         confirmResult(db, set.id, {});
         expect(db.get<{ n: number }>('SELECT COUNT(*) AS n FROM tasks WHERE priority_rank IS NOT NULL')!.n).toBe(2);
+        // Renumbered 1..2 over the live tasks, no gap where the deleted one sat.
+        expect(db.all('SELECT priority_rank FROM tasks ORDER BY priority_rank').map((r) => (r as { priority_rank: number }).priority_rank)).toEqual([1, 2]);
         // A re-run leaves the deleted task out.
         const again = createSet(db, space, { scope: { type: 'project', projectId: 1 } });
         expect(again.itemCount).toBe(2);
